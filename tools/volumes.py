@@ -1,0 +1,83 @@
+# library of mcp tools relating to volume management
+
+from server import mcp
+from tools.client import _get_client
+
+
+@mcp.tool()
+def create_volume(
+    name: str | None = None,
+    driver: str | None = None,
+    driver_opts: dict | None = None,
+    labels: dict | None = None,
+) -> dict:
+    """
+    Create a volume.
+
+    args:
+        name: str - Volume name (auto-generated if omitted)
+        driver: str - Volume driver name
+        driver_opts: dict - Driver-specific options
+        labels: dict - Labels to set on the volume
+    returns: dict - The created volume's attrs
+    """
+    kwargs: dict = {}
+    if name is not None:
+        kwargs["name"] = name
+    if driver is not None:
+        kwargs["driver"] = driver
+    if driver_opts is not None:
+        kwargs["driver_opts"] = driver_opts
+    if labels is not None:
+        kwargs["labels"] = labels
+    return _get_client().volumes.create(**kwargs).attrs
+
+
+@mcp.tool()
+def get_volume(volume_id: str) -> dict:
+    """
+    Get a volume by name.
+
+    args: volume_id: str - The volume name
+    returns: dict - The volume's attrs
+    """
+    return _get_client().volumes.get(volume_id).attrs
+
+
+@mcp.tool()
+def list_volumes(filters: dict | None = None) -> list:
+    """
+    List volumes.
+
+    args: filters: dict - Filter by attributes (e.g. dangling, name, label)
+    returns: list - A list of volume attrs dicts
+    """
+    kwargs: dict = {}
+    if filters is not None:
+        kwargs["filters"] = filters
+    return [v.attrs for v in _get_client().volumes.list(**kwargs)]
+
+
+@mcp.tool()
+def prune_volumes(filters: dict | None = None) -> dict:
+    """
+    Remove unused volumes.
+
+    args: filters: dict - Filters to apply
+    returns: dict - Information on deleted volumes and reclaimed space
+    """
+    return _get_client().volumes.prune(filters=filters)
+
+
+@mcp.tool()
+def remove_volume(volume_id: str, force: bool = False) -> bool:
+    """
+    Remove a volume.
+
+    args:
+        volume_id: str - The volume name
+        force: bool - Force removal
+    returns: bool - True after removal
+    """
+    _get_client().volumes.get(volume_id).remove(force=force)
+    return True

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`docker-mcp` is a Python MCP server (requires Python >=3.14) managed with `uv` that exposes the Docker SDK for Python (docker-py) as MCP tools. The entry point is `main.py`.
+`docker-mcp` is a Python MCP server (requires Python >=3.14) managed with `uv` that exposes the Docker SDK for Python as MCP tools. The entry point is `main.py`.
 
 ## Commands
 
@@ -61,7 +61,7 @@ Each file maps to one section of the Docker SDK documentation and contains `@mcp
 | `tools/nodes.py` | Swarm nodes |
 | `tools/plugins.py` | Plugin install and management |
 | `tools/prompts.py` | `@mcp.prompt()` templates for common docker workflows |
-| `tools/resources.py` | `@mcp.resource()` endpoints exposing the docker-py docs |
+| `tools/resources.py` | `@mcp.resource()` endpoints exposing the Docker SDK for Python docs |
 | `tools/secrets.py` | Swarm secrets |
 | `tools/services.py` | Swarm services |
 | `tools/swarm.py` | Swarm init, join, leave |
@@ -101,7 +101,7 @@ def mcp_example(name: str):
 
 ### MCP resources
 
-`tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data — currently the docker-py documentation under the `docker-docs://` URI scheme. Resources follow the same docstring format as tools and are also star-imported via `tools/__init__.py`.
+`tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data — currently the Docker SDK for Python documentation under the `docker-docs://` URI scheme. Resources follow the same docstring format as tools and are also star-imported via `tools/__init__.py`.
 
 ### MCP prompts
 
@@ -110,9 +110,9 @@ def mcp_example(name: str):
 ## Docker SDK Policy
 
 **Before writing or modifying any code that calls the Docker SDK (`docker` package), you MUST run `/docker-sdk` (or `/docker-sdk <topic>`) to:**
-1. Verify exact method signatures from the live docker-py documentation
+1. Verify exact method signatures from the live Docker SDK for Python documentation
 2. Confirm parameter names and return types before writing code
-3. Never use a docker-py method that has not been confirmed in the docs
+3. Never use a `docker` module method that has not been confirmed in the docs
 
 Do not assume any method exists because it sounds plausible. If you cannot confirm it from the documentation, say so and do not use it.
 

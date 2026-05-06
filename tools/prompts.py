@@ -3,10 +3,10 @@
 from server import mcp
 
 
-@mcp.prompt(description="Read the docker-py documentation for a section before writing code that uses it.")
+@mcp.prompt(description="Read the Docker SDK for Python documentation for a section before writing code that uses it.")
 def lookup_docker_docs(section: str) -> str:
     """
-    Ask the agent to consult the docker-py documentation for a specific section.
+    Ask the agent to consult the Docker SDK for Python documentation for a specific section.
 
     args: section: str - SDK section name (e.g. "containers", "images", "swarm")
     returns: str - A prompt instructing the agent to read the docker-docs resource and summarize the API
@@ -19,10 +19,10 @@ def lookup_docker_docs(section: str) -> str:
     )
 
 
-@mcp.prompt(description="Verify that a specific docker-py method exists before relying on it.")
+@mcp.prompt(description="Verify that a specific Docker SDK method exists before relying on it.")
 def verify_docker_method(method: str, section: str) -> str:
     """
-    Ask the agent to verify a docker-py method against the live SDK docs.
+    Ask the agent to verify a method of the `docker` module against the live SDK docs.
 
     args: method: str - The method name to verify (e.g. "containers.run")
     args: section: str - The SDK section to check (e.g. "containers")

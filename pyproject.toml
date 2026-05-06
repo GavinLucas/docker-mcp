@@ -1,7 +1,7 @@
 [project]
 name = "docker-mcp"
 version = "0.1.0"
-description = "MCP server for managing Docker containers"
+description = "MCP server for managing Docker resources via the Docker SDK for Python"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [

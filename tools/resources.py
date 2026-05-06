@@ -43,7 +43,7 @@ def list_docs_sections() -> str:
 @mcp.resource("docker-docs://{section}", mime_type="text/html")
 def get_docs_section(section: str) -> str:
     """
-    Fetch the docker-py SDK documentation page for a section.
+    Fetch the Docker SDK for Python documentation page for a section.
 
     args: section: str - Section name (e.g. "containers", "images", "swarm")
     returns: str - The HTML content of the documentation page

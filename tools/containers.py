@@ -404,9 +404,14 @@ def exec_in_container(
     """
     Run a command inside a running container.
 
+    Security: pass `cmd` as a list (e.g. ["sh", "-c", "echo hi"]) when any element
+    is derived from agent-controlled input. A string `cmd` is interpreted by a
+    shell inside the container, so untrusted substrings can introduce shell
+    metacharacters and run unintended commands.
+
     args:
         id_or_name: str - The container id or name
-        cmd: str | list - The command to execute
+        cmd: str | list - The command to execute (prefer a list to avoid shell parsing)
         stdout: bool - Attach to stdout
         stderr: bool - Attach to stderr
         stdin: bool - Attach to stdin

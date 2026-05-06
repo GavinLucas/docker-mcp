@@ -94,7 +94,16 @@ Many AI clients let you invoke registered MCP prompts directly (in Claude Code, 
 > Show every container, network, and volume tagged `com.example.app=web` as one table. Don't change anything.
 > We're tight on disk — show `df`, prune stopped containers and dangling images, then show `df` again. Skip volumes.
 
-> **Security note.** A connected agent can start, stop, and remove Docker resources. Only enable this server in environments where granting an agent that level of access is acceptable, and prefer a daemon scoped to the workloads you're happy for the agent to touch.
+## Security considerations
+
+Connecting this server to an AI agent grants it the same level of access as a local Docker CLI session against the configured daemon. That is broad: the daemon's socket is effectively root-equivalent on the host running it. Treat the agent as a privileged user and weigh the risks below before enabling the server.
+
+- **Use a scoped daemon.** Prefer pointing `DOCKER_HOST` at a daemon dedicated to workloads the agent is allowed to touch (a development VM, a remote sandbox, Docker Desktop, a rootless install) rather than your production socket. The daemon is the trust boundary — there is no per-tool authorization layer.
+- **Privileged containers and host mounts.** `run_container` accepts `privileged=True` and arbitrary `volumes`. A privileged container, or one that bind-mounts `/` from the host, can trivially escape to the host filesystem. Avoid letting the agent set these unless you have reviewed the request.
+- **Registry credentials.** `login`, `push_image`, and `get_registry_data` accept credentials directly as tool arguments. Many MCP clients log tool calls verbatim, so treat any password or `auth_config` you pass through these tools as exposed. Prefer authenticating once on the host with `docker login` so the daemon's stored credentials are reused — leave the credential parameters unset.
+- **`exec_in_container` runs arbitrary commands.** Commands passed as a single string are interpreted by a shell inside the target container; pass `cmd` as a list to avoid shell parsing of agent-controlled input.
+- **Container archive paths.** `get_container_archive` and `put_container_archive` forward the supplied path verbatim to the daemon. The container is the trust boundary — if you do not trust its filesystem, do not assume `..` traversal will be rejected.
+- **Destructive operations have no built-in confirmation.** `prune_*`, `remove_*`, `kill_container`, and `leave_swarm` execute immediately. The shipped `clean_environment` prompt asks the agent to confirm before pruning volumes, but tool calls themselves are not gated. If you need an approval step, configure it at the MCP client (e.g. Claude Code's permission prompts) rather than relying on the server.
 
 ## Contributing
 

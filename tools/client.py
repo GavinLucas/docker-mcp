@@ -76,6 +76,10 @@ def login(
     """
     Authenticate with a Docker registry.
 
+    Security: the password is sent as a tool argument, which many MCP clients log
+    verbatim. Prefer running `docker login` once on the host so the daemon reuses
+    its stored credentials, and avoid calling this tool from an agent loop.
+
     args:
         username: str - Registry username
         password: str - Registry password or token

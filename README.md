@@ -56,7 +56,7 @@ Once loaded, the agent gets MCP tools grouped by Docker domain. A few examples:
 
 The full surface mirrors the [Docker SDK reference](https://docker-py.readthedocs.io/en/stable/) — if it's documented there, it's available here.
 
-The server also publishes the docker-py reference itself as MCP resources so the agent can consult the SDK docs at runtime: read `docker-docs://contents` for the section index, then `docker-docs://<section>` (e.g. `docker-docs://containers`) for the rendered HTML page.
+The server also publishes the Docker SDK for Python reference itself as MCP resources so the agent can consult the SDK docs at runtime: read `docker-docs://contents` for the section index, then `docker-docs://<section>` (e.g. `docker-docs://containers`) for the rendered HTML page.
 
 ### Example prompts
 
@@ -100,7 +100,7 @@ Connecting this server to an AI agent grants it the same level of access as a lo
 
 - **Use a scoped daemon.** Prefer pointing `DOCKER_HOST` at a daemon dedicated to workloads the agent is allowed to touch (a development VM, a remote sandbox, Docker Desktop, a rootless install) rather than your production socket. The daemon is the trust boundary — there is no per-tool authorization layer.
 - **Privileged containers and host mounts.** `run_container` accepts `privileged=True` and arbitrary `volumes`. A privileged container, or one that bind-mounts `/` from the host, can trivially escape to the host filesystem. Avoid letting the agent set these unless you have reviewed the request.
-- **Registry credentials.** `login`, `push_image`, and `get_registry_data` accept credentials directly as tool arguments. Many MCP clients log tool calls verbatim, so treat any password or `auth_config` you pass through these tools as exposed. Prefer running `docker login` once on the host running this MCP server so docker-py can reuse credentials cached in that host's Docker config (typically `~/.docker/config.json`) — leave the credential parameters unset. (Note: this is the host running the server, not the daemon — relevant when `DOCKER_HOST` points at a remote daemon.)
+- **Registry credentials.** `login`, `push_image`, and `get_registry_data` accept credentials directly as tool arguments. Many MCP clients log tool calls verbatim, so treat any password or `auth_config` you pass through these tools as exposed. Prefer running `docker login` once on the host running this MCP server so the `docker` module can reuse credentials cached in that host's Docker config (typically `~/.docker/config.json`) — leave the credential parameters unset. (Note: this is the host running the server, not the daemon — relevant when `DOCKER_HOST` points at a remote daemon.)
 - **`exec_in_container` runs arbitrary commands.** When any part of `cmd` is derived from agent-controlled input, use an exec-form argv list that does not invoke a shell (e.g. `["python", "-V"]`). A string `cmd` — or a list like `["sh", "-c", template]` that invokes a shell — will interpret shell metacharacters in the untrusted substrings.
 - **Container archive paths.** `get_container_archive` and `put_container_archive` forward the supplied path verbatim to the daemon. The container is the trust boundary — if you do not trust its filesystem, do not assume `..` traversal will be rejected.
 - **Destructive operations have no built-in confirmation.** `prune_*`, `remove_*`, `kill_container`, and `leave_swarm` execute immediately. The shipped `clean_environment` prompt asks the agent to confirm before pruning volumes, but tool calls themselves are not gated. If you need an approval step, configure it at the MCP client (e.g. Claude Code's permission prompts) rather than relying on the server.
@@ -128,7 +128,7 @@ Contributions are welcome. The project values a tight mapping between the Docker
 │   ├── swarm.py
 │   ├── plugins.py
 │   ├── prompts.py     # @mcp.prompt() templates for common docker workflows
-│   └── resources.py   # @mcp.resource() endpoints exposing the docker-py docs
+│   └── resources.py   # @mcp.resource() endpoints exposing the Docker SDK for Python docs
 └── tests/             # pytest suite, mirrors `tools/` one-to-one
 ```
 
@@ -155,7 +155,7 @@ def mcp_example(name: str):
 
 ### Verifying the SDK before writing code
 
-To prevent hallucinated method names, the project includes a `/docker-sdk` Claude Code skill that fetches the live docker-py documentation, inventories what's already exposed, and produces a gap analysis. Run it before adding new tools:
+To prevent hallucinated method names, the project includes a `/docker-sdk` Claude Code skill that fetches the live Docker SDK for Python documentation, inventories what's already exposed, and produces a gap analysis. Run it before adding new tools:
 
 ```
 /docker-sdk                    # full gap analysis

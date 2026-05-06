@@ -1,4 +1,4 @@
-"""MCP server for managing docker containers using docker-py"""
+"""MCP server for managing docker containers using the Docker SDK for Python"""
 
 from server import mcp
 import tools  # noqa: F401  -- imported for side effects (registers @mcp.tool() decorators)

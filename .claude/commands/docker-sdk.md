@@ -1,6 +1,6 @@
 # Docker SDK Reference Check
 
-This skill fetches and cross-references the Docker SDK for Python (docker-py) documentation to:
+This skill fetches and cross-references the Docker SDK for Python documentation to:
 1. Verify that any SDK function or class you plan to use actually exists
 2. Identify which SDK features are not yet exposed in this MCP server
 
@@ -41,12 +41,12 @@ The project structure maps SDK domains to tool files one-to-one:
 | `tools/nodes.py` | `tests/test_nodes.py` | Swarm Nodes |
 | `tools/plugins.py` | `tests/test_plugins.py` | Plugins |
 | `tools/prompts.py` | `tests/test_prompts.py` | `@mcp.prompt()` templates for common docker workflows |
-| `tools/resources.py` | `tests/test_resources.py` | `@mcp.resource()` endpoints for the docker-py docs |
+| `tools/resources.py` | `tests/test_resources.py` | `@mcp.resource()` endpoints for the Docker SDK for Python docs |
 | `tools/secrets.py` | `tests/test_secrets.py` | Swarm Secrets |
 | `tools/services.py` | `tests/test_services.py` | Swarm Services |
 | `tools/swarm.py` | `tests/test_swarm.py` | Swarm |
 
-Read each `tools/*.py` file and list every `@mcp.tool` decorated function and the docker-py methods it calls.
+Read each `tools/*.py` file and list every `@mcp.tool` decorated function and the `docker` module methods it calls.
 
 ### Step 3 — Produce a gap analysis
 
@@ -56,11 +56,11 @@ Compare the SDK surface area from Step 1 against the MCP tool inventory from Ste
 ## Docker SDK Coverage Report
 
 ### Currently Exposed
-- <docker-py method>() → <MCP tool name> (tools/<file>.py)
+- <`docker` module method>() → <MCP tool name> (tools/<file>.py)
 ...
 
 ### Not Yet Exposed (SDK features missing from MCP server)
-- <docker-py method>() — <one-line description> → should go in tools/<file>.py
+- <`docker` module method>() — <one-line description> → should go in tools/<file>.py
 ...
 
 ### Verification Notes
@@ -70,7 +70,7 @@ in the live documentation, with the exact signature.
 
 ### Step 4 — Guard against hallucination
 
-Before any code you write in this session uses a docker-py method:
+Before any code you write in this session uses a `docker` module method:
 - Confirm the exact method name, parameter names, and return type from the fetched docs
 - If the docs don't clearly show a method, state that it could not be verified and do not use it
 - Never assume a method exists because it sounds plausible

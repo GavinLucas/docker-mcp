@@ -325,9 +325,9 @@ def follow_container_logs(
     """
     Tail a container's log stream, returning at most `limit_lines` newly emitted lines.
 
-    Wraps the docker-py streaming logs API so the agent can watch live output without
-    blocking forever — the call returns once `limit_lines` lines have been collected
-    or the container exits.
+    Wraps the streaming logs API of the `docker` module so the agent can watch live
+    output without blocking forever — the call returns once `limit_lines` lines have
+    been collected or the container exits.
 
     args:
         id_or_name: str - The container id or name

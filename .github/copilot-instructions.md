@@ -4,7 +4,7 @@ This file provides guidance to GitHub Copilot when working with code in this rep
 
 ## Project
 
-`docker-mcp` is a Python MCP (Model Context Protocol) server that exposes the Docker SDK for Python (docker-py) as MCP tools. It requires Python >=3.14 and is managed with `uv`.
+`docker-mcp` is a Python MCP (Model Context Protocol) server that exposes the Docker SDK for Python as MCP tools. It requires Python >=3.14 and is managed with `uv`.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ Each file in `tools/` maps to one section of the Docker SDK documentation and co
 | `tools/nodes.py` | Swarm nodes |
 | `tools/plugins.py` | Plugin install and management |
 | `tools/prompts.py` | `@mcp.prompt()` templates for common docker workflows |
-| `tools/resources.py` | `@mcp.resource()` endpoints exposing the docker-py docs |
+| `tools/resources.py` | `@mcp.resource()` endpoints exposing the Docker SDK for Python docs |
 | `tools/secrets.py` | Swarm secrets |
 | `tools/services.py` | Swarm services |
 | `tools/swarm.py` | Swarm init, join, leave |
@@ -71,7 +71,7 @@ def mcp_example(name: str):
 
 ### MCP resources
 
-`tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data — currently the docker-py documentation under the `docker-docs://` URI scheme. Use the same docstring format as tools.
+`tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data — currently the Docker SDK for Python documentation under the `docker-docs://` URI scheme. Use the same docstring format as tools.
 
 ### MCP prompts
 
@@ -79,7 +79,7 @@ def mcp_example(name: str):
 
 ## Docker SDK Policy
 
-**Only use docker-py methods that are documented in the official reference.**  
+**Only use `docker` module methods that are documented in the official reference.**  
 Always verify the exact method name, parameter names, and return type at https://docker-py.readthedocs.io/en/stable/ before writing or suggesting code. Do not suggest methods that sound plausible but are not in the docs.
 
 Docker SDK docs: https://docker-py.readthedocs.io/en/stable/index.html  

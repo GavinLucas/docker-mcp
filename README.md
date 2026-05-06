@@ -17,11 +17,10 @@ Add an entry to your AI tool's MCP configuration (commonly `mcp.json` or the equ
 ```json
 {
   "mcpServers": {
-    "docker": {
-      "command": "uv",
+    "docker-mcp": {
+      "command": "uvx",
       "args": [
-        "run",
-        "--with",
+        "--from",
         "git+https://github.com/GavinLucas/docker-mcp.git",
         "docker-mcp"
       ],

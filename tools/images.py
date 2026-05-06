@@ -100,6 +100,12 @@ def get_registry_data(name: str, auth_config: dict | None = None) -> dict:
     """
     Get registry data for an image without pulling it.
 
+    Security: `auth_config` carries registry credentials and many MCP clients log
+    tool arguments verbatim. Prefer authenticating on the host running this MCP
+    server with `docker login` so docker-py can reuse credentials cached in that
+    host's Docker config (typically `~/.docker/config.json`), and leave
+    `auth_config` unset.
+
     args:
         name: str - Image reference
         auth_config: dict - Optional registry authentication config
@@ -146,6 +152,12 @@ def pull_image(
 def push_image(repository: str, tag: str | None = None, auth_config: dict | None = None) -> str:
     """
     Push an image or repository to a registry.
+
+    Security: `auth_config` carries registry credentials and many MCP clients log
+    tool arguments verbatim. Prefer authenticating on the host running this MCP
+    server with `docker login` so docker-py can reuse credentials cached in that
+    host's Docker config (typically `~/.docker/config.json`), and leave
+    `auth_config` unset.
 
     args:
         repository: str - The image repository

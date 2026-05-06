@@ -404,9 +404,17 @@ def exec_in_container(
     """
     Run a command inside a running container.
 
+    Security: when any element of `cmd` is derived from agent-controlled input,
+    use an exec-form argv list that does not invoke a shell — e.g. ["python", "-V"]
+    or ["ls", path]. A string `cmd`, or a list like ["sh", "-c", template] that
+    invokes a shell, will interpret shell metacharacters in the untrusted parts
+    and can run unintended commands.
+
     args:
         id_or_name: str - The container id or name
-        cmd: str | list - The command to execute
+        cmd: str | list - The command to execute (prefer an exec-form argv list
+                          that does not invoke a shell when any element is
+                          agent-controlled)
         stdout: bool - Attach to stdout
         stderr: bool - Attach to stderr
         stdin: bool - Attach to stdin

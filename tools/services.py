@@ -1,5 +1,7 @@
 # library of mcp tools relating to swarm service management
 
+from typing import Literal
+
 from server import mcp
 from tools.client import _get_client
 
@@ -96,10 +98,14 @@ def service_logs(
     stderr: bool = True,
     since: int = 0,
     timestamps: bool = False,
-    tail: str = "all",
+    tail: int | Literal["all"] = "all",
 ) -> str:
     """
     Get the log stream of a swarm service.
+
+    The default `tail="all"` returns the entire log buffer, which can be very large
+    on long-running services and may exceed the agent's context. Pass an integer
+    (e.g. `tail=500`) to constrain output, or use `since` to bound the time range.
 
     args:
         service_id: str - The service id or name
@@ -109,7 +115,7 @@ def service_logs(
         stderr: bool - Include stderr
         since: int - Show logs since this Unix timestamp
         timestamps: bool - Include timestamps
-        tail: str - Number of lines from the end (or "all")
+        tail: int | "all" - Number of lines from the end, or the literal "all"
     returns: str - Decoded log output
     """
     service = _get_client().services.get(service_id)

@@ -2,8 +2,8 @@
 
 from typing import Any, Iterable
 
+# Default cap (1 GiB) for tools that accumulate daemon-side byte streams in memory.
 MAX_PAYLOAD_BYTES = 1_073_741_824
-"""Default cap (1 GiB) for tools that accumulate daemon-side byte streams in memory."""
 
 
 def drop_none(**kwargs: Any) -> dict[str, Any]:
@@ -18,18 +18,21 @@ def drop_none(**kwargs: Any) -> dict[str, Any]:
 
 def join_bounded(chunks: Iterable[bytes], max_bytes: int, what: str) -> bytes:
     """
-    Concatenate bytes chunks, aborting with ValueError if the running total exceeds max_bytes.
+    Concatenate bytes chunks, aborting with ValueError if the running total would exceed max_bytes.
 
     Wraps the `b"".join(stream)` pattern used by tools that buffer a whole daemon-side
     payload (container export, image save, container archive) so a pathological input can't
-    OOM the MCP server process.
+    OOM the MCP server process. The cap is checked *before* the next chunk is appended, so
+    the in-memory buffer never grows past `max_bytes`.
     """
+    if max_bytes < 0:
+        raise ValueError(f"max_bytes must be non-negative, got {max_bytes}")
     collected = bytearray()
     for chunk in chunks:
-        collected.extend(chunk)
-        if len(collected) > max_bytes:
+        if len(collected) + len(chunk) > max_bytes:
             raise ValueError(
                 f"{what} exceeded max_bytes={max_bytes}; aborted to prevent memory exhaustion. "
                 f"Raise max_bytes if a larger payload is intended."
             )
+        collected.extend(chunk)
     return bytes(collected)

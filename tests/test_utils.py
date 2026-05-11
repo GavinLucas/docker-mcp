@@ -40,3 +40,22 @@ def test_join_bounded_raises_when_cap_exceeded():
 
 def test_join_bounded_empty_stream_returns_empty_bytes():
     assert join_bounded(iter([]), max_bytes=10, what="test") == b""
+
+
+def test_join_bounded_rejects_negative_max_bytes():
+    with pytest.raises(ValueError, match="max_bytes must be non-negative"):
+        join_bounded(iter([b"x"]), max_bytes=-1, what="test")
+
+
+def test_join_bounded_does_not_extend_past_cap():
+    # Stream yields one huge chunk that would push the buffer over the cap on the very first
+    # iteration — verify we raise *before* extending so the bytearray never grows past max_bytes.
+    consumed = []
+
+    def stream():
+        consumed.append("big")
+        yield b"x" * 1000
+
+    with pytest.raises(ValueError, match="exceeded max_bytes=10"):
+        join_bounded(stream(), max_bytes=10, what="test")
+    assert consumed == ["big"]

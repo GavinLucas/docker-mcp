@@ -69,7 +69,7 @@ Each file maps to one section of the Docker SDK documentation and contains `@mcp
 ### Tests (`tests/`)
 Each `tools/<module>.py` has a corresponding `tests/test_<module>.py`. Tests use pytest. The `tests/__init__.py` is intentionally empty.
 
-`tests/integration/` holds tests that hit a real Docker daemon. They are marked `@pytest.mark.integration` (or `pytestmark = pytest.mark.integration` at module level) and excluded by default via `addopts = "-m 'not integration'"` in `pyproject.toml`. Each test calls `_skip_if_no_daemon()` so the suite skips cleanly when no daemon is reachable.
+`tests/integration/` holds tests that hit a real Docker daemon. `tests/integration/conftest.py` auto-marks every test in the directory with `@pytest.mark.integration` (excluded by default via `addopts = "-m 'not integration'"` in `pyproject.toml`) and provides an autouse `skip_if_no_daemon` fixture so the suite skips cleanly when no daemon is reachable. Run with `uv run pytest -m integration`.
 
 ## Conventions
 

@@ -61,6 +61,14 @@ jobs:
     name: Run integration tests
     needs: [pytest-run]
     timeout-minutes: 20
+    # Hoist secrets to job-level env. GitHub Actions does NOT allow the `secrets`
+    # context inside a step-level `if:` (it's blocked for security reasons), and
+    # step-scoped `env:` is not yet resolved when `if:` is evaluated. Job-level
+    # `env:` IS resolved in time, so the Hub-login step below can gate on
+    # `env.DOCKERHUB_TOKEN` safely.
+    env:
+      DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - name: Check out source repository
         uses: actions/checkout@v4
@@ -90,12 +98,7 @@ jobs:
         # Opt-in: set DOCKERHUB_USER / DOCKERHUB_TOKEN as repo secrets to authenticate.
         # Without them, the job runs anonymous and the existing skip-on-pull-failure
         # behaviour in the compose lifecycle test catches throttling.
-        # The `if:` must reference `secrets.*` directly — step-scoped `env:` is not
-        # available when the `if:` expression is evaluated.
-        if: ${{ secrets.DOCKERHUB_TOKEN != '' && secrets.DOCKERHUB_USER != '' }}
-        env:
-          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        if: ${{ env.DOCKERHUB_TOKEN != '' && env.DOCKERHUB_USER != '' }}
         run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USER" --password-stdin
 
       - name: Run integration tests

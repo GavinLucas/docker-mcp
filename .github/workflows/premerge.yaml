@@ -61,11 +61,13 @@ jobs:
     name: Run integration tests
     needs: [pytest-run]
     timeout-minutes: 20
-    # Hoist secrets to job-level env. GitHub Actions does NOT allow the `secrets`
-    # context inside a step-level `if:` (it's blocked for security reasons), and
-    # step-scoped `env:` is not yet resolved when `if:` is evaluated. Job-level
-    # `env:` IS resolved in time, so the Hub-login step below can gate on
-    # `env.DOCKERHUB_TOKEN` safely.
+    # The Hub-login step below gates on `env.DOCKERHUB_TOKEN`, which means the env
+    # var needs to be resolved by the time the step `if:` is evaluated. Step-scoped
+    # `env:` is set up too late for that, so we hoist the values to job-level env
+    # (which IS resolved before any step `if:` runs). Referencing `secrets.*`
+    # directly in the step `if:` is rejected at workflow-validation time with
+    # "Unrecognized named-value: 'secrets'", so this hoist is the only working
+    # shape for an opt-in-via-secret gate.
     env:
       DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

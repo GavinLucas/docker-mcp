@@ -199,12 +199,16 @@ def scout_sbom(
 
     args:
         image: str - Image reference
-        format: str - SBOM format: "spdx" (default), "cyclonedx", or "list"
+        format: str - SBOM format. Accepted values (per `docker scout sbom --format`):
+                      - "spdx" (the default for this tool) — SPDX JSON
+                      - "cyclonedx" — CycloneDX JSON
+                      - "json" — Scout's native SBOM JSON (the CLI's own default)
+                      - "list" — a plain-text list of packages, no schema
         platform: str - Platform of the image to analyze
     returns: dict - {"format": <format>, "result": <…>, "raw": <CliResult dict>}.
                     `result` is a parsed dict when `format` is one of "spdx", "cyclonedx",
                     or "json" (all JSON serializations) and the stdout parses cleanly;
-                    otherwise (e.g. format="list", or unparseable JSON) it's the raw text.
+                    when `format="list"` or the JSON fails to parse, `result` is the raw text.
     """
     args: list[str] = ["sbom", "--format", format]
     if platform is not None:

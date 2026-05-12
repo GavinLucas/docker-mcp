@@ -48,6 +48,25 @@ def test_parse_json_lines_empty_returns_empty_list():
     assert _parse_json_lines("") == []
 
 
+def test_parse_json_lines_drops_partial_last_line_when_truncated():
+    # Last entry is cut off (no closing brace) — should be dropped when truncated=True.
+    body = '{"a": 1}\n{"a": 2}\n{"a": 3, "b":'
+    assert _parse_json_lines(body, truncated=True) == [{"a": 1}, {"a": 2}]
+
+
+def test_parse_json_lines_raises_descriptively_on_garbage_when_not_truncated():
+    body = '{"a": 1}\nnot-json-at-all'
+    with pytest.raises(RuntimeError, match="Could not parse .* JSON.*line 2.*truncated=False"):
+        _parse_json_lines(body, truncated=False, what="buildx test output")
+
+
+def test_parse_json_lines_truncated_keeps_complete_earlier_records():
+    body = '{"a": 1}\n{"a": 2}'  # the second is "complete" but we still drop it when truncated
+    # When truncated=True, the last line is always dropped on the assumption it may be partial.
+    # That's a conservative call — the alternative (trying to detect completeness) is brittle.
+    assert _parse_json_lines(body, truncated=True) == [{"a": 1}]
+
+
 # ---------- buildx_build ----------
 
 
@@ -261,6 +280,14 @@ def test_buildx_ls_raises_on_failure():
     with patch("tools.buildx.run_docker", return_value=_fail("daemon error")):
         with pytest.raises(RuntimeError, match="daemon error"):
             buildx_ls()
+
+
+def test_buildx_ls_drops_partial_record_when_truncated():
+    body = '{"Name":"default","Current":true}\n{"Name":"remote",'  # second record cut off
+    truncated_result = CliResult(returncode=0, stdout=body, stderr="", truncated=True)
+    with patch("tools.buildx.run_docker", return_value=truncated_result):
+        result = buildx_ls()
+    assert result == [{"Name": "default", "Current": True}]
 
 
 def test_buildx_du_parses_ndjson():

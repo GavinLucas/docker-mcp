@@ -31,14 +31,29 @@ def _raise_on_failure(result: CliResult, action: str) -> None:
         )
 
 
-def _parse_json_lines(text: str) -> list[dict]:
-    """Parse one JSON object per non-blank line of `text`, tolerating a trailing blank line."""
+def _parse_json_lines(text: str, *, truncated: bool = False, what: str = "buildx output") -> list[dict]:
+    """
+    Parse one JSON object per non-blank line of `text`.
+
+    args:
+        text: NDJSON to parse
+        truncated: True if the underlying stdout was capped by run_docker's byte limit.
+                   When set, the final non-blank line is assumed to be a partial record
+                   and is dropped before parsing rather than crashing on a half-record.
+        what: short label used in error messages, e.g. "buildx du output".
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if truncated and lines:
+        lines = lines[:-1]
     items: list[dict] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        items.append(json.loads(line))
+    for line_number, line in enumerate(lines, start=1):
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Could not parse {what} as JSON (line {line_number}, truncated={truncated}): {exc}. "
+                f"Snippet: {line[:200]!r}"
+            ) from exc
     return items
 
 
@@ -323,11 +338,13 @@ def buildx_ls() -> list:
     """
     List builder instances.
 
-    returns: list - One dict per builder (parsed from `--format '{{json .}}'`)
+    returns: list - One dict per builder (parsed from `--format '{{json .}}'`).
+                    If the captured stdout was truncated by MAX_CLI_OUTPUT_BYTES the
+                    last (likely partial) record is dropped before parsing.
     """
     result = _run_buildx(["ls", "--format", "{{json .}}"], timeout=_TIMEOUT_QUERY)
     _raise_on_failure(result, "ls")
-    return _parse_json_lines(result.stdout)
+    return _parse_json_lines(result.stdout, truncated=result.truncated, what="buildx ls output")
 
 
 @mcp.tool()
@@ -354,6 +371,11 @@ def buildx_du(builder: str | None = None) -> list:
     """
     Report BuildKit cache disk usage as a list of records.
 
+    A large cache can easily generate more output than MAX_CLI_OUTPUT_BYTES; if that
+    happens the captured stdout is truncated and this tool drops the final (partial)
+    record before parsing. For an exhaustive accounting on a busy builder, run
+    `docker buildx du --format '{{json .}}'` on the host directly.
+
     args: builder: str - Override the active builder
     returns: list - One dict per cache record (parsed from `--format '{{json .}}'`)
     """
@@ -362,7 +384,7 @@ def buildx_du(builder: str | None = None) -> list:
         args.extend(["--builder", builder])
     result = _run_buildx(args, timeout=_TIMEOUT_QUERY)
     _raise_on_failure(result, "du")
-    return _parse_json_lines(result.stdout)
+    return _parse_json_lines(result.stdout, truncated=result.truncated, what="buildx du output")
 
 
 @mcp.tool()

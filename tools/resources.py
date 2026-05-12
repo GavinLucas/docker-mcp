@@ -52,19 +52,28 @@ def list_docs_sections() -> str:
     """
     List the available documentation sections.
 
+    The response keeps the original `base_url` and `sections` (a list of section names)
+    fields for backward compatibility with clients that parsed the pre-extension shape.
+    Sections served from external URLs (compose, context, registry specs) appear in
+    `sections` alongside the SDK ones; their absolute URLs live in `section_urls`.
+
     returns: str - JSON describing each section's source URL and how to read it
     """
-    sections = {section: f"{DOCKER_DOCS_BASE_URL}/{section}.html" for section in SDK_SECTIONS}
-    sections.update(EXTERNAL_SECTIONS)
+    section_names: list[str] = [*SDK_SECTIONS, *EXTERNAL_SECTIONS.keys()]
+    section_urls: dict[str, str] = {section: f"{DOCKER_DOCS_BASE_URL}/{section}.html" for section in SDK_SECTIONS}
+    section_urls.update(EXTERNAL_SECTIONS)
     return json.dumps(
         {
+            "base_url": DOCKER_DOCS_BASE_URL,
             "sdk_base_url": DOCKER_DOCS_BASE_URL,
-            "sections": sections,
+            "sections": section_names,
+            "section_urls": section_urls,
             "usage": (
                 "Read docker-docs://<section> to fetch the documentation for that section. "
-                "Sections under sdk_base_url cover the Docker SDK for Python; the remaining "
-                "sections cover docker CLI features (compose, context) and registry HTTP APIs "
-                "(OCI distribution spec, Docker Hub) that this server exposes outside the SDK."
+                "Sections served from `base_url` cover the Docker SDK for Python; the "
+                "remaining sections (see `section_urls`) cover docker CLI features (compose, "
+                "context) and registry HTTP APIs (OCI distribution spec, Docker Hub) that "
+                "this server exposes outside the SDK."
             ),
         },
         indent=2,

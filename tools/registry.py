@@ -29,16 +29,39 @@ _MANIFEST_ACCEPT = ", ".join(
 )
 
 
+def _strip_tag_and_digest(image: str) -> str:
+    """
+    Strip an optional `@sha256:...` digest and `:tag` from an image reference.
+
+    The colon in a registry hostname's port (e.g. `localhost:5000/foo`) is preserved —
+    we only strip a trailing `:tag` that appears *after* the last `/` in the reference,
+    so `ghcr.io:443/org/repo:v1` correctly becomes `ghcr.io:443/org/repo`.
+    """
+    if "@" in image:
+        image = image.split("@", 1)[0]
+    last_slash = image.rfind("/")
+    last_colon = image.rfind(":")
+    if last_colon > last_slash:
+        image = image[:last_colon]
+    return image
+
+
 def _parse_image_ref(image: str) -> tuple[str, str]:
     """
     Split an image reference into (registry_host, repository_path).
 
+    Any `:tag` or `@digest` suffix is stripped — pass tag/digest separately via the
+    `reference` parameter of `registry_inspect_manifest`.
+
     Docker Hub conventions:
-      "alpine"          -> ("registry-1.docker.io", "library/alpine")
-      "user/repo"       -> ("registry-1.docker.io", "user/repo")
-      "ghcr.io/u/r"     -> ("ghcr.io", "u/r")
-      "localhost:5000/r"-> ("localhost:5000", "r")
+      "alpine"             -> ("registry-1.docker.io", "library/alpine")
+      "alpine:3.19"        -> ("registry-1.docker.io", "library/alpine")
+      "user/repo"          -> ("registry-1.docker.io", "user/repo")
+      "ghcr.io/u/r"        -> ("ghcr.io", "u/r")
+      "ghcr.io/u/r@sha256:..." -> ("ghcr.io", "u/r")
+      "localhost:5000/r"   -> ("localhost:5000", "r")
     """
+    image = _strip_tag_and_digest(image)
     if "/" not in image:
         return (_DEFAULT_REGISTRY, f"library/{image}")
     first, _, rest = image.partition("/")
@@ -133,19 +156,23 @@ def registry_list_tags(
     Works against Docker Hub, GHCR, ECR public/private, GAR, and any other OCI-compliant
     registry. Anonymous if no credentials are passed.
 
-    Security: many MCP clients log tool arguments verbatim. Avoid passing `password` from
-    an agent loop — prefer `docker login` on the host running this MCP server and (for
-    private images on Hub) use the `hub_*` tools which honour the same credentials cache
-    indirectly via your scoped daemon, or pass credentials only for one-off probes.
+    Note: this tool talks directly to the registry over HTTPS and does NOT read the local
+    Docker credential store (`~/.docker/config.json`). For private registries you must pass
+    `username` and `password` explicitly. Many MCP clients log tool arguments verbatim, so
+    treat any password you pass through this tool as exposed — prefer per-invocation tokens
+    with the minimum required scope rather than long-lived passwords.
 
     args:
-        image: str - Image reference, e.g. "alpine", "library/alpine", "ghcr.io/org/repo"
-        username: str - Optional registry username
-        password: str - Optional registry password or token
-        limit: int - Maximum number of tags to return (default 1000). The OCI pagination
-                     loop is also capped at 50 pages to keep the call bounded.
+        image: str - Image reference, e.g. "alpine", "library/alpine", "ghcr.io/org/repo".
+                     Any trailing `:tag` or `@digest` is stripped before listing.
+        username: str - Optional registry username (required only for private repos)
+        password: str - Optional registry password or token (required only for private repos)
+        limit: int - Maximum number of tags to return (default 1000; must be >= 1). The OCI
+                     pagination loop is also capped at 50 pages to keep the call bounded.
     returns: dict - {"name": <repo>, "registry": <host>, "tags": [..], "truncated": bool}
     """
+    if limit < 1:
+        raise ValueError(f"limit must be >= 1, got {limit}")
     registry, repo = _parse_image_ref(image)
     tags: list[str] = []
     truncated = False
@@ -192,9 +219,11 @@ def registry_inspect_manifest(
     manifest list / OCI image index, depending on what the registry serves for that tag.
 
     args:
-        image: str - Image reference, e.g. "alpine", "ghcr.io/org/repo"
+        image: str - Image reference, e.g. "alpine", "ghcr.io/org/repo". Any trailing
+                     `:tag` or `@digest` is stripped — pass the tag/digest as `reference`.
         reference: str - Tag or digest (default "latest")
-        username: str - Optional registry username
+        username: str - Optional registry username (required only for private repos;
+                        this tool does NOT read `~/.docker/config.json`)
         password: str - Optional registry password or token
     returns: dict - {"name": <repo>, "registry": <host>, "reference": <ref>,
                      "media_type": <Content-Type>, "digest": <Docker-Content-Digest>,
@@ -236,13 +265,20 @@ def hub_list_tags(repository: str, limit: int = 100) -> dict:
     when you need that metadata; use `registry_list_tags` for parity across non-Hub
     registries.
 
+    Public Hub repositories only — this tool sends no authentication and does NOT read
+    `~/.docker/config.json` or `docker login` credentials. Private Hub repositories will
+    return a 404 / 401 from the Hub API. (For private images, use `registry_list_tags`
+    against `registry-1.docker.io` with explicit credentials.)
+
     args:
         repository: str - Hub repository, e.g. "library/alpine" or "myorg/myimage"
-        limit: int - Maximum number of tags to return (default 100). Pagination is
-                     also capped at 50 pages to keep the call bounded.
+        limit: int - Maximum number of tags to return (default 100; must be >= 1).
+                     Pagination is also capped at 50 pages to keep the call bounded.
     returns: dict - {"name": <repo>, "tags": [{name, full_size, last_updated, digest, images}, ...],
                      "truncated": bool}
     """
+    if limit < 1:
+        raise ValueError(f"limit must be >= 1, got {limit}")
     repo = _hub_normalize(repository)
     url: str | None = f"{_HUB_API_BASE}/repositories/{repo}/tags?page_size=100"
     tags: list[dict[str, Any]] = []
@@ -276,6 +312,9 @@ def hub_list_tags(repository: str, limit: int = 100) -> dict:
 def hub_repo_info(repository: str) -> dict:
     """
     Fetch Docker Hub metadata for a repository.
+
+    Public Hub repositories only — sends no authentication and does NOT read the local
+    Docker credential store. Private repositories will return 404 / 401.
 
     args: repository: str - Hub repository, e.g. "library/alpine" or "myorg/myimage"
     returns: dict - The Hub /v2/repositories/<repo>/ response (description, star_count,

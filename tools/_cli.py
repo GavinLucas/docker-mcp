@@ -21,6 +21,8 @@ MAX_CLI_OUTPUT_BYTES = 4_194_304  # 4 MiB
 
 # Env vars we always forward to child docker invocations. Anything not in this
 # allow-list is dropped so the subprocess gets a minimal, predictable environment.
+# SSH_* keys are required for `docker context use` against an `ssh://` daemon — the
+# CLI shells out to the ssh client which needs the agent socket to authenticate.
 _BASE_ENV_KEYS = (
     "PATH",
     "HOME",
@@ -37,6 +39,10 @@ _BASE_ENV_KEYS = (
     "COMPOSE_PROJECT_NAME",
     "COMPOSE_FILE",
     "COMPOSE_PROFILES",
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "SSH_ASKPASS",
+    "XDG_RUNTIME_DIR",
 )
 
 # Windows-only env vars Docker Desktop and credential helpers need to locate
@@ -151,12 +157,19 @@ def run_docker(
     )
 
 
+# Errors that mean "we couldn't even probe the plugin" — never let them propagate
+# out of `has_plugin`. Assigning the tuple to a module-level constant also dodges
+# the PEP 758 parenthesis-free `except` form that older parsers (and PR review bots)
+# flag as a syntax error.
+_PLUGIN_PROBE_ERRORS: tuple[type[BaseException], ...] = (FileNotFoundError, subprocess.TimeoutExpired)
+
+
 @functools.cache
 def has_plugin(name: str) -> bool:
     """Return True if `docker <name> version` exits 0. Cached per process."""
     try:
         result = run_docker([name, "version"], timeout=10)
-    except FileNotFoundError, subprocess.TimeoutExpired:
+    except _PLUGIN_PROBE_ERRORS:
         return False
     return result.returncode == 0
 

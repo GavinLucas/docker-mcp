@@ -14,13 +14,19 @@ from tools.resources import (
 
 def test_list_docs_sections_returns_json_with_sdk_and_external_sections():
     payload = json.loads(list_docs_sections())
+    # Backward-compatible fields: `base_url` (SDK base) and `sections` (list of section names).
+    assert payload["base_url"] == DOCKER_DOCS_BASE_URL
     assert payload["sdk_base_url"] == DOCKER_DOCS_BASE_URL
-    # Every SDK section is mapped to its base-URL'd HTML page.
+    assert isinstance(payload["sections"], list)
     for section in SDK_SECTIONS:
-        assert payload["sections"][section] == f"{DOCKER_DOCS_BASE_URL}/{section}.html"
-    # Every external section is mapped to its absolute URL.
+        assert section in payload["sections"]
+    for section in EXTERNAL_SECTIONS:
+        assert section in payload["sections"]
+    # New field: `section_urls` maps each section name to its absolute URL.
+    for section in SDK_SECTIONS:
+        assert payload["section_urls"][section] == f"{DOCKER_DOCS_BASE_URL}/{section}.html"
     for section, url in EXTERNAL_SECTIONS.items():
-        assert payload["sections"][section] == url
+        assert payload["section_urls"][section] == url
     assert "usage" in payload
 
 

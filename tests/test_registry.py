@@ -8,6 +8,7 @@ from tools.registry import (
     _next_link,
     _parse_bearer_challenge,
     _parse_image_ref,
+    _strip_tag_and_digest,
     hub_list_tags,
     hub_repo_info,
     registry_inspect_manifest,
@@ -36,6 +37,41 @@ def test_parse_image_ref_localhost_with_port():
 
 def test_parse_image_ref_registry_with_port():
     assert _parse_image_ref("registry.example.com:443/team/svc") == ("registry.example.com:443", "team/svc")
+
+
+# ---------- _strip_tag_and_digest / _parse_image_ref with tag or digest ----------
+
+
+def test_strip_tag_and_digest_strips_tag():
+    assert _strip_tag_and_digest("alpine:3.19") == "alpine"
+
+
+def test_strip_tag_and_digest_strips_digest():
+    assert _strip_tag_and_digest("alpine@sha256:abcdef") == "alpine"
+
+
+def test_strip_tag_and_digest_strips_tag_and_digest_together():
+    assert _strip_tag_and_digest("alpine:3.19@sha256:abc") == "alpine"
+
+
+def test_strip_tag_and_digest_preserves_registry_port():
+    assert _strip_tag_and_digest("localhost:5000/foo/bar") == "localhost:5000/foo/bar"
+
+
+def test_strip_tag_and_digest_preserves_registry_port_and_strips_tag():
+    assert _strip_tag_and_digest("localhost:5000/foo/bar:v1") == "localhost:5000/foo/bar"
+
+
+def test_parse_image_ref_strips_tag_from_official_image():
+    assert _parse_image_ref("alpine:3.19") == ("registry-1.docker.io", "library/alpine")
+
+
+def test_parse_image_ref_strips_digest_from_ghcr_ref():
+    assert _parse_image_ref("ghcr.io/org/repo@sha256:deadbeef") == ("ghcr.io", "org/repo")
+
+
+def test_parse_image_ref_strips_tag_from_registry_with_port():
+    assert _parse_image_ref("localhost:5000/foo/bar:v1") == ("localhost:5000", "foo/bar")
 
 
 # ---------- _parse_bearer_challenge ----------
@@ -174,6 +210,13 @@ def test_registry_list_tags_respects_limit():
     assert result["truncated"] is True
 
 
+def test_registry_list_tags_rejects_non_positive_limit():
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        registry_list_tags("alpine", limit=0)
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        registry_list_tags("alpine", limit=-5)
+
+
 def test_registry_list_tags_raises_on_500():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="boom")
@@ -251,6 +294,11 @@ def test_hub_list_tags_respects_limit():
 
     assert [t["name"] for t in result["tags"]] == ["v0", "v1", "v2"]
     assert result["truncated"] is True
+
+
+def test_hub_list_tags_rejects_non_positive_limit():
+    with pytest.raises(ValueError, match="limit must be >= 1"):
+        hub_list_tags("alpine", limit=0)
 
 
 # ---------- hub_repo_info ----------

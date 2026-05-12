@@ -4,6 +4,7 @@
 # they work without a running daemon and without the docker CLI. Anonymous
 # (unauthenticated) access is used unless a username/password is supplied.
 
+import datetime
 import email.utils
 import re
 import time
@@ -138,6 +139,11 @@ def _parse_retry_after(value: str | None) -> float | None:
         return None
     if parsed is None:
         return None
+    # RFC 7231 / 9110 mandates that HTTP-dates are UTC. `parsedate_to_datetime` returns
+    # a naive datetime when the source said `-0000` (and only then); naive `.timestamp()`
+    # would re-interpret in local time and skew the delay. Force UTC explicitly.
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
     delta = parsed.timestamp() - time.time()
     return max(0.0, delta)
 

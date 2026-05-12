@@ -78,8 +78,11 @@ def buildx_build(
     `--progress=plain` so output is captured rather than redrawn on a TTY.
 
     args:
-        context: str - Build context (path, URL, or `-` to use a tarball on stdin).
-                       Passed verbatim to docker; no shell expansion of `~` or globs.
+        context: str - Build context: a filesystem path or a Git/HTTP URL. Passed verbatim
+                       to docker; no shell expansion of `~` or globs. The `-` form (tarball
+                       on stdin) is NOT supported — this tool doesn't forward stdin to the
+                       subprocess, so `-` would block on the MCP server's own stdin. Pre-pack
+                       a tarball and serve it via an HTTP URL if you need that workflow.
         tags: list[str] - Image references to apply (`-t`, repeatable)
         platforms: list[str] - Target platforms, e.g. ["linux/amd64", "linux/arm64"]
         file: str - Dockerfile path (relative to context unless absolute)
@@ -105,6 +108,13 @@ def buildx_build(
         timeout_seconds: float - Subprocess timeout (default 1800s)
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
+    if context == "-":
+        raise ValueError(
+            "buildx_build: context='-' (read a tarball from stdin) is not supported by this "
+            "tool because we don't forward stdin to the buildx subprocess — `-` would block "
+            "on the MCP server's own stdin. Use a filesystem path or an HTTP/Git URL instead, "
+            "or pre-stage the context on disk."
+        )
     if push and load:
         raise ValueError(
             "buildx_build: `push` and `load` are mutually exclusive; --load only works for "

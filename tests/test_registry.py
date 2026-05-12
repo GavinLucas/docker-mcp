@@ -433,6 +433,21 @@ def test_parse_retry_after_http_date_in_future():
     assert result > 1000
 
 
+def test_parse_retry_after_treats_naive_date_as_utc():
+    """RFC 7231 says HTTP-dates are UTC. `-0000` parses to a naive datetime; we must
+    treat it as UTC rather than letting `.timestamp()` re-interpret in local time."""
+    from tools.registry import _parse_retry_after
+
+    # `-0000` is the only HTTP-date timezone notation that produces a naive datetime
+    # out of email.utils.parsedate_to_datetime. The same wall-clock moment expressed
+    # as `-0000` and `+0000` must yield the same delay value.
+    naive = _parse_retry_after("Wed, 21 Oct 2099 07:28:00 -0000")
+    aware = _parse_retry_after("Wed, 21 Oct 2099 07:28:00 +0000")
+    assert naive is not None and aware is not None
+    # Allow a 1s slack because two calls to time.time() bracket the math.
+    assert abs(naive - aware) < 1.0
+
+
 def test_parse_retry_after_invalid_returns_none():
     from tools.registry import _parse_retry_after
 

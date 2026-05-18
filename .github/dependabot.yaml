@@ -1,0 +1,14 @@
+# Dependabot keeps GitHub Actions on their latest minor/patch versions so we
+# don't silently fall behind on Node-runtime bumps (e.g. Node 20 -> 24).
+# Python dependencies are managed by uv, so we deliberately don't enable the
+# pip ecosystem here.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"

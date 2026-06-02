@@ -9,8 +9,8 @@
 
 import json
 
-from server import mcp
-from tools._cli import CliResult, require_plugin, run_docker
+from docker_mcp.server import mcp
+from docker_mcp.tools._cli import CliResult, require_plugin, run_docker
 
 # Per-operation timeout ceilings (seconds). Builds and pulls can run for many minutes
 # against slow registries / large contexts, so they get longer ceilings than queries.

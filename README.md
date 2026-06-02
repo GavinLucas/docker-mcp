@@ -65,7 +65,7 @@ The server also publishes the Docker SDK for Python reference and selected Docke
 
 ### Example prompts
 
-Many AI clients let you invoke registered MCP prompts directly (in Claude Code, type `/` to see them). The server ships a small library of templates in `tools/prompts.py` that scaffold multi-step workflows — they emit a structured plan that the agent then carries out using the docker tools.
+Many AI clients let you invoke registered MCP prompts directly (in Claude Code, type `/` to see them). The server ships a small library of templates in `docker_mcp/tools/prompts.py` that scaffold multi-step workflows — they emit a structured plan that the agent then carries out using the docker tools.
 
 **Looking things up in the SDK docs**
 
@@ -146,34 +146,36 @@ Contributions are welcome. The project values a tight mapping between the Docker
 
 ```
 .
-├── docker_mcp.py      # entry point — runs the FastMCP server over stdio
-├── server.py          # creates the FastMCP singleton (`mcp`) shared by every tool module
-├── tools/             # one file per Docker SDK domain or CLI/registry feature
-│   ├── _cli.py        # cross-platform subprocess helper for docker CLI shell-outs (private)
-│   ├── _utils.py      # shared helpers (drop_none, join_bounded, MAX_PAYLOAD_BYTES) (private)
-│   ├── client.py      # DockerClient connection + lazy `_get_client()` helper
-│   ├── containers.py
-│   ├── images.py
-│   ├── networks.py
-│   ├── volumes.py
-│   ├── configs.py
-│   ├── secrets.py
-│   ├── nodes.py
-│   ├── services.py
-│   ├── swarm.py
-│   ├── plugins.py
-│   ├── compose.py     # `docker compose` CLI plugin (shells out via _cli.py)
-│   ├── context.py     # `docker context` CLI (shells out via _cli.py)
-│   ├── buildx.py      # `docker buildx` CLI plugin (shells out via _cli.py)
-│   ├── scout.py       # `docker scout` CLI plugin (shells out via _cli.py)
-│   ├── registry.py    # OCI v2 registries + Docker Hub HTTPS APIs (no daemon)
-│   ├── prompts.py     # @mcp.prompt() templates for common docker workflows
-│   └── resources.py   # @mcp.resource() endpoints exposing SDK + CLI + registry docs
-└── tests/             # pytest suite, mirrors `tools/` one-to-one
-    └── integration/   # tests that hit a real Docker daemon or docker.io
+├── docker_mcp/            # the package — `python -m docker_mcp` runs the server
+│   ├── __init__.py        # defines `main()`; side-effect-imports `server` and `tools`
+│   ├── __main__.py        # calls `main()` so `python -m docker_mcp` works
+│   ├── server.py          # creates the FastMCP singleton (`mcp`) shared by every tool module
+│   └── tools/             # one file per Docker SDK domain or CLI/registry feature
+│       ├── _cli.py        # cross-platform subprocess helper for docker CLI shell-outs (private)
+│       ├── _utils.py      # shared helpers (drop_none, join_bounded, MAX_PAYLOAD_BYTES) (private)
+│       ├── client.py      # DockerClient connection + lazy `_get_client()` helper
+│       ├── containers.py
+│       ├── images.py
+│       ├── networks.py
+│       ├── volumes.py
+│       ├── configs.py
+│       ├── secrets.py
+│       ├── nodes.py
+│       ├── services.py
+│       ├── swarm.py
+│       ├── plugins.py
+│       ├── compose.py     # `docker compose` CLI plugin (shells out via _cli.py)
+│       ├── context.py     # `docker context` CLI (shells out via _cli.py)
+│       ├── buildx.py      # `docker buildx` CLI plugin (shells out via _cli.py)
+│       ├── scout.py       # `docker scout` CLI plugin (shells out via _cli.py)
+│       ├── registry.py    # OCI v2 registries + Docker Hub HTTPS APIs (no daemon)
+│       ├── prompts.py     # @mcp.prompt() templates for common docker workflows
+│       └── resources.py   # @mcp.resource() endpoints exposing SDK + CLI + registry docs
+└── tests/                 # pytest suite, mirrors `docker_mcp/tools/` one-to-one
+    └── integration/       # tests that hit a real Docker daemon or docker.io
 ```
 
-Each `tools/<file>.py` has a matching `tests/test_<file>.py`. New modules must be added to `tools/__init__.py` and have a corresponding test file. Tool modules that wrap CLI features must funnel every subprocess call through `tools/_cli.py` so the cross-platform safety concerns (binary discovery, no shell, UTF-8 decoding, output capping, Windows console suppression, env scrubbing) live in one place.
+Each `docker_mcp/tools/<file>.py` has a matching `tests/test_<file>.py`. New modules must be added to `docker_mcp/tools/__init__.py` and have a corresponding test file. Tool modules that wrap CLI features must funnel every subprocess call through `docker_mcp/tools/_cli.py` so the cross-platform safety concerns (binary discovery, no shell, UTF-8 decoding, output capping, Windows console suppression, env scrubbing) live in one place.
 
 ### Conventions
 
@@ -191,19 +193,19 @@ def mcp_example(name: str):
     return f"Hello, {name}!"
 ```
 
-- Import `mcp` from `server.py`, never directly from the `mcp` package — that creates a circular import.
+- Import `mcp` from `docker_mcp.server`, never directly from the `mcp` package — that creates a circular import.
 - Line length is 120 characters (enforced by ruff).
-- CLI shell-outs must go through `tools/_cli.py:run_docker` — never call `subprocess.run` directly from a tool module. The helper enforces `shell=False`, resolves the binary via `shutil.which` (cross-platform), decodes output as UTF-8 with replace, caps the captured bytes, scrubs the environment, and suppresses console pop-ups on Windows.
+- CLI shell-outs must go through `docker_mcp/tools/_cli.py:run_docker` — never call `subprocess.run` directly from a tool module. The helper enforces `shell=False`, resolves the binary via `shutil.which` (cross-platform), decodes output as UTF-8 with replace, caps the captured bytes, scrubs the environment, and suppresses console pop-ups on Windows.
 
 ### Checklist when adding a new tool module
 
-When you add a new `tools/<domain>.py`, also update:
+When you add a new `docker_mcp/tools/<domain>.py`, also update:
 
-1. **`tools/__init__.py`** — star-import the module (private helpers prefixed with `_` are excluded).
+1. **`docker_mcp/tools/__init__.py`** — star-import the module (private helpers prefixed with `_` are excluded).
 2. **`tests/test_<domain>.py`** — unit tests using mocks (no real daemon).
 3. **`tests/integration/test_<domain>.py`** — at least one happy-path test against a real daemon (or override the `skip_if_no_daemon` fixture if the module doesn't need one).
-4. **`tools/prompts.py`** — at least one `@mcp.prompt(...)` template that exercises the new tools end-to-end.
-5. **`tools/resources.py`** — add an entry under `SDK_SECTIONS` or `EXTERNAL_SECTIONS` if the new domain has authoritative docs the agent should be able to read at runtime.
+4. **`docker_mcp/tools/prompts.py`** — at least one `@mcp.prompt(...)` template that exercises the new tools end-to-end.
+5. **`docker_mcp/tools/resources.py`** — add an entry under `SDK_SECTIONS` or `EXTERNAL_SECTIONS` if the new domain has authoritative docs the agent should be able to read at runtime.
 6. **README.md** — append to the "What the agent can do" list and (if relevant) the "Security considerations" section.
 7. **SECURITY.md** — only if the new module exposes a new class of risk not already covered by the README's Security section.
 
@@ -223,7 +225,7 @@ To prevent hallucinated method names, the project includes a `/docker-sdk` Claud
 uv sync
 
 # run the server
-uv run python docker_mcp.py
+uv run python -m docker_mcp
 # …or via the installed console script
 uv run docker-mcp
 

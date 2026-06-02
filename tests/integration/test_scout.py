@@ -5,8 +5,8 @@
 
 import pytest
 
-from tools._cli import has_plugin
-from tools.scout import scout_quickview
+from docker_mcp.tools._cli import has_plugin
+from docker_mcp.tools.scout import scout_quickview
 
 
 @pytest.fixture(scope="module", autouse=True)

@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.images import (
+from docker_mcp.tools.images import (
     build_image,
     get_image,
     get_registry_data,
@@ -20,7 +20,7 @@ from tools.images import (
 
 
 def _patch():
-    return patch("tools.images._get_client")
+    return patch("docker_mcp.tools.images._get_client")
 
 
 def test_build_image():

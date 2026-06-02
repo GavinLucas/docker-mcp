@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from tools.configs import create_config, get_config, list_configs, remove_config
+from docker_mcp.tools.configs import create_config, get_config, list_configs, remove_config
 
 
 def _patch():
-    return patch("tools.configs._get_client")
+    return patch("docker_mcp.tools.configs._get_client")
 
 
 def test_create_config():

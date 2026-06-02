@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from tools.swarm import (
+from docker_mcp.tools.swarm import (
     get_swarm_unlock_key,
     init_swarm,
     join_swarm,
@@ -12,7 +12,7 @@ from tools.swarm import (
 
 
 def _patch():
-    return patch("tools.swarm._get_client")
+    return patch("docker_mcp.tools.swarm._get_client")
 
 
 def test_init_swarm():

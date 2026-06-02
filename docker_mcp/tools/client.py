@@ -5,7 +5,7 @@ import os
 import docker
 from docker.errors import DockerException
 
-from server import mcp
+from docker_mcp.server import mcp
 
 _client: docker.DockerClient | None = None
 

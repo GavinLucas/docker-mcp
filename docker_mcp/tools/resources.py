@@ -3,7 +3,7 @@
 import json
 import urllib.request
 
-from server import mcp
+from docker_mcp.server import mcp
 
 DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
 

@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from tools.secrets import create_secret, get_secret, list_secrets, remove_secret
+from docker_mcp.tools.secrets import create_secret, get_secret, list_secrets, remove_secret
 
 
 def _patch():
-    return patch("tools.secrets._get_client")
+    return patch("docker_mcp.tools.secrets._get_client")
 
 
 def test_create_secret():

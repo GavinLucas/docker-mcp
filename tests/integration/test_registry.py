@@ -6,7 +6,7 @@
 import httpx
 import pytest
 
-from tools.registry import (
+from docker_mcp.tools.registry import (
     hub_list_tags,
     hub_repo_info,
     registry_inspect_manifest,

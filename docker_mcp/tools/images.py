@@ -1,8 +1,8 @@
 # library of mcp tools relating to image management
 
-from server import mcp
-from tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded
-from tools.client import _get_client
+from docker_mcp.server import mcp
+from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded
+from docker_mcp.tools.client import _get_client
 
 
 @mcp.tool()

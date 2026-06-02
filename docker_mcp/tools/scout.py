@@ -7,8 +7,8 @@
 
 import json
 
-from server import mcp
-from tools._cli import CliResult, require_plugin, run_docker
+from docker_mcp.server import mcp
+from docker_mcp.tools._cli import CliResult, require_plugin, run_docker
 
 # Scout calls are CDN-backed network queries; 5 minutes is plenty for any one image.
 _TIMEOUT_SCOUT = 300.0

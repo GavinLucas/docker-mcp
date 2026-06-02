@@ -1,9 +1,9 @@
 # integration tests — require a real Docker daemon at $DOCKER_HOST (or the default unix socket).
 # run with: uv run pytest -m integration
 
-from tools.client import df, info, ping, version
-from tools.containers import list_containers
-from tools.images import list_images
+from docker_mcp.tools.client import df, info, ping, version
+from docker_mcp.tools.containers import list_containers
+from docker_mcp.tools.images import list_images
 
 
 def test_ping_real_daemon():

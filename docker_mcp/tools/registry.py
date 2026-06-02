@@ -12,7 +12,7 @@ from typing import Any, NoReturn
 
 import httpx
 
-from server import mcp
+from docker_mcp.server import mcp
 
 _DEFAULT_TIMEOUT = 30.0
 _USER_AGENT = "docker-mcp/0.1"

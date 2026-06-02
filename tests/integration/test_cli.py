@@ -3,7 +3,7 @@
 
 import json
 
-from tools._cli import has_plugin, run_docker
+from docker_mcp.tools._cli import has_plugin, run_docker
 
 
 def test_run_docker_version_exits_zero():

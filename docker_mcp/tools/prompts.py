@@ -1,6 +1,6 @@
 # library of mcp prompt templates that guide the agent through common docker workflows
 
-from server import mcp
+from docker_mcp.server import mcp
 
 
 @mcp.prompt(description="Read the Docker SDK for Python documentation for a section before writing code that uses it.")

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from tools._cli import has_plugin
-from tools.buildx import buildx_build, buildx_du, buildx_imagetools_inspect, buildx_ls
+from docker_mcp.tools._cli import has_plugin
+from docker_mcp.tools.buildx import buildx_build, buildx_du, buildx_imagetools_inspect, buildx_ls
 
 # A minimal Dockerfile that produces a tiny image without pulling anything large.
 # `scratch` is the empty base image and ships with the buildx plugin's defaults.

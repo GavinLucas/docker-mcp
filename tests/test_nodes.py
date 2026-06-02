@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from tools.nodes import get_node, list_nodes, update_node
+from docker_mcp.tools.nodes import get_node, list_nodes, update_node
 
 
 def _patch():
-    return patch("tools.nodes._get_client")
+    return patch("docker_mcp.tools.nodes._get_client")
 
 
 def test_get_node():

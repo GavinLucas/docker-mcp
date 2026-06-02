@@ -1,4 +1,4 @@
-from tools.prompts import (
+from docker_mcp.tools.prompts import (
     audit_docker_contexts,
     audit_image_cves,
     clean_environment,

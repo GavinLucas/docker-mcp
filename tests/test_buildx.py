@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tools._cli import CliResult
-from tools.buildx import (
+from docker_mcp.tools._cli import CliResult
+from docker_mcp.tools.buildx import (
     _parse_json_lines,
     buildx_bake,
     buildx_build,
@@ -21,7 +21,7 @@ from tools.buildx import (
 
 @pytest.fixture(autouse=True)
 def _stub_plugin_check():  # pyright: ignore[reportUnusedFunction]
-    with patch("tools.buildx.require_plugin"):
+    with patch("docker_mcp.tools.buildx.require_plugin"):
         yield
 
 
@@ -71,7 +71,7 @@ def test_parse_json_lines_truncated_keeps_complete_earlier_records():
 
 
 def test_buildx_build_minimal_context_only():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".")
     args = run.call_args.args[0]
     assert args[:3] == ["buildx", "build", "--progress=plain"]
@@ -79,7 +79,7 @@ def test_buildx_build_minimal_context_only():
 
 
 def test_buildx_build_passes_tags_and_platforms():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".", tags=["org/app:v1", "org/app:latest"], platforms=["linux/amd64", "linux/arm64"])
     args = run.call_args.args[0]
     assert args.count("--tag") == 2
@@ -90,7 +90,7 @@ def test_buildx_build_passes_tags_and_platforms():
 
 
 def test_buildx_build_single_platform_passes_one_flag():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".", platforms=["linux/amd64"])
     args = run.call_args.args[0]
     assert args.count("--platform") == 1
@@ -98,13 +98,13 @@ def test_buildx_build_single_platform_passes_one_flag():
 
 
 def test_buildx_build_omits_platform_when_not_supplied():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".")
     assert "--platform" not in run.call_args.args[0]
 
 
 def test_buildx_build_dict_args_emit_repeated_flags():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(
             context=".",
             build_args={"VERSION": "1.0", "DEBUG": "1"},
@@ -120,17 +120,17 @@ def test_buildx_build_dict_args_emit_repeated_flags():
 
 
 def test_buildx_build_push_and_load_flags_independent():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".", push=True)
     assert "--push" in run.call_args.args[0]
 
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".", load=True)
     assert "--load" in run.call_args.args[0]
 
 
 def test_buildx_build_cache_and_attestation_flags():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(
             context=".",
             cache_from=["type=registry,ref=org/cache"],
@@ -150,7 +150,7 @@ def test_buildx_build_cache_and_attestation_flags():
 
 
 def test_buildx_build_secret_and_ssh():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_build(context=".", secret=["id=npmrc,src=/home/user/.npmrc"], ssh=["default"])
     args = run.call_args.args[0]
     assert args[args.index("--secret") + 1] == "id=npmrc,src=/home/user/.npmrc"
@@ -158,7 +158,7 @@ def test_buildx_build_secret_and_ssh():
 
 
 def test_buildx_build_returns_returncode_dict():
-    with patch("tools.buildx.run_docker", return_value=_fail("build failed", returncode=2)):
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_fail("build failed", returncode=2)):
         result = buildx_build(context=".")
     assert result["returncode"] == 2
     assert result["stderr"] == "build failed"
@@ -173,14 +173,14 @@ def test_buildx_build_rejects_push_and_load_together():
 
 
 def test_buildx_bake_minimal_uses_progress_plain():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_bake()
     args = run.call_args.args[0]
     assert args[:3] == ["buildx", "bake", "--progress=plain"]
 
 
 def test_buildx_bake_targets_appended_last():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_bake(targets=["app", "tests"], files=["docker-bake.hcl"], push=True)
     args = run.call_args.args[0]
     # Targets are positional, must come after all flags
@@ -190,7 +190,7 @@ def test_buildx_bake_targets_appended_last():
 
 
 def test_buildx_bake_set_overrides_repeat():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_bake(set_overrides=["app.platform=linux/amd64", "tests.no-cache=true"])
     args = run.call_args.args[0]
     assert args.count("--set") == 2
@@ -200,7 +200,7 @@ def test_buildx_bake_set_overrides_repeat():
 
 
 def test_buildx_imagetools_inspect_default_args():
-    with patch("tools.buildx.run_docker", return_value=_ok("[ ... ]")) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("[ ... ]")) as run:
         result = buildx_imagetools_inspect("alpine:3.19")
     args = run.call_args.args[0]
     assert args[:3] == ["buildx", "imagetools", "inspect"]
@@ -211,11 +211,11 @@ def test_buildx_imagetools_inspect_default_args():
 
 
 def test_buildx_imagetools_inspect_raw_and_format():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_imagetools_inspect("alpine:3.19", raw=True)
     assert "--raw" in run.call_args.args[0]
 
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_imagetools_inspect("alpine:3.19", format="{{json .}}")
     args = run.call_args.args[0]
     assert args[args.index("--format") + 1] == "{{json .}}"
@@ -230,7 +230,7 @@ def test_buildx_imagetools_inspect_rejects_raw_and_format_together():
 
 
 def test_buildx_imagetools_create_target_and_sources():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_imagetools_create(
             target="org/app:v1",
             sources=["org/app:v1-amd64", "org/app:v1-arm64"],
@@ -242,7 +242,7 @@ def test_buildx_imagetools_create_target_and_sources():
 
 
 def test_buildx_imagetools_create_append_dry_run_annotations():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_imagetools_create(
             target="org/app:v1",
             sources=["org/app:v1-amd64"],
@@ -266,7 +266,7 @@ def test_buildx_imagetools_create_requires_sources_or_files():
 
 def test_buildx_ls_parses_ndjson():
     body = '{"Name":"default","Driver":"docker","Current":true}\n{"Name":"remote","Driver":"docker-container","Current":false}\n'
-    with patch("tools.buildx.run_docker", return_value=_ok(body)) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok(body)) as run:
         result = buildx_ls()
     args = run.call_args.args[0]
     assert args == ["buildx", "ls", "--format", "{{json .}}"]
@@ -277,7 +277,7 @@ def test_buildx_ls_parses_ndjson():
 
 
 def test_buildx_ls_raises_on_failure():
-    with patch("tools.buildx.run_docker", return_value=_fail("daemon error")):
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_fail("daemon error")):
         with pytest.raises(RuntimeError, match="daemon error"):
             buildx_ls()
 
@@ -285,14 +285,14 @@ def test_buildx_ls_raises_on_failure():
 def test_buildx_ls_drops_partial_record_when_truncated():
     body = '{"Name":"default","Current":true}\n{"Name":"remote",'  # second record cut off
     truncated_result = CliResult(returncode=0, stdout=body, stderr="", truncated=True)
-    with patch("tools.buildx.run_docker", return_value=truncated_result):
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=truncated_result):
         result = buildx_ls()
     assert result == [{"Name": "default", "Current": True}]
 
 
 def test_buildx_du_parses_ndjson():
     body = '{"ID":"abc","Size":"1MB"}\n{"ID":"def","Size":"2MB"}\n'
-    with patch("tools.buildx.run_docker", return_value=_ok(body)) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok(body)) as run:
         result = buildx_du(builder="builder-x")
     args = run.call_args.args[0]
     assert args[:4] == ["buildx", "du", "--format", "{{json .}}"]
@@ -301,7 +301,7 @@ def test_buildx_du_parses_ndjson():
 
 
 def test_buildx_inspect_with_bootstrap():
-    with patch("tools.buildx.run_docker", return_value=_ok("Name: default")) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("Name: default")) as run:
         buildx_inspect(bootstrap=True)
     args = run.call_args.args[0]
     assert "--bootstrap" in args
@@ -311,14 +311,14 @@ def test_buildx_inspect_with_bootstrap():
 
 
 def test_buildx_prune_always_passes_force():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_prune()
     args = run.call_args.args[0]
     assert args[:3] == ["buildx", "prune", "--force"]
 
 
 def test_buildx_prune_filter_and_space_flags():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_prune(
             all=True,
             filter={"until": "24h", "type": "exec.cachemount"},
@@ -338,7 +338,7 @@ def test_buildx_prune_filter_and_space_flags():
 
 
 def test_buildx_create_driver_opts_repeat():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_create(
             name="builder-x",
             driver="docker-container",
@@ -360,7 +360,7 @@ def test_buildx_create_driver_opts_repeat():
 
 
 def test_buildx_use_with_default_flags():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_use("builder-x", default=True, global_default=True)
     args = run.call_args.args[0]
     assert "--default" in args
@@ -379,7 +379,7 @@ def test_buildx_rm_rejects_name_and_all_inactive_together():
 
 
 def test_buildx_rm_all_inactive():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_rm(all_inactive=True, keep_state=True)
     args = run.call_args.args[0]
     assert args[:2] == ["buildx", "rm"]
@@ -388,7 +388,7 @@ def test_buildx_rm_all_inactive():
 
 
 def test_buildx_rm_named_with_force():
-    with patch("tools.buildx.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok()) as run:
         buildx_rm(name="builder-x", force=True)
     args = run.call_args.args[0]
     assert "--force" in args

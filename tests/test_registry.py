@@ -4,7 +4,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 
-from tools.registry import (
+from docker_mcp.tools.registry import (
     _next_link,
     _parse_bearer_challenge,
     _parse_image_ref,
@@ -127,7 +127,7 @@ def _mock_client(transport_handler):
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    return patch("tools.registry.httpx.Client", side_effect=factory)
+    return patch("docker_mcp.tools.registry.httpx.Client", side_effect=factory)
 
 
 def test_registry_list_tags_single_page_anonymous():
@@ -416,7 +416,7 @@ def test_hub_repo_info_applies_429_policy():
 
 
 def test_parse_retry_after_seconds():
-    from tools.registry import _parse_retry_after
+    from docker_mcp.tools.registry import _parse_retry_after
 
     assert _parse_retry_after("0") == 0.0
     assert _parse_retry_after("30") == 30.0
@@ -424,7 +424,7 @@ def test_parse_retry_after_seconds():
 
 
 def test_parse_retry_after_http_date_in_future():
-    from tools.registry import _parse_retry_after
+    from docker_mcp.tools.registry import _parse_retry_after
 
     # An HTTP date far in the future should produce a positive value (the absolute number
     # depends on the wall clock, so only assert ordering).
@@ -436,7 +436,7 @@ def test_parse_retry_after_http_date_in_future():
 def test_parse_retry_after_treats_naive_date_as_utc():
     """RFC 7231 says HTTP-dates are UTC. `-0000` parses to a naive datetime; we must
     treat it as UTC rather than letting `.timestamp()` re-interpret in local time."""
-    from tools.registry import _parse_retry_after
+    from docker_mcp.tools.registry import _parse_retry_after
 
     # `-0000` is the only HTTP-date timezone notation that produces a naive datetime
     # out of email.utils.parsedate_to_datetime. The same wall-clock moment expressed
@@ -449,7 +449,7 @@ def test_parse_retry_after_treats_naive_date_as_utc():
 
 
 def test_parse_retry_after_invalid_returns_none():
-    from tools.registry import _parse_retry_after
+    from docker_mcp.tools.registry import _parse_retry_after
 
     assert _parse_retry_after(None) is None
     assert _parse_retry_after("") is None

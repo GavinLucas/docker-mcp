@@ -6,8 +6,8 @@
 
 import json
 
-from server import mcp
-from tools._cli import CliResult, run_docker
+from docker_mcp.server import mcp
+from docker_mcp.tools._cli import CliResult, run_docker
 
 
 def _raise_on_failure(result: CliResult, action: str) -> None:

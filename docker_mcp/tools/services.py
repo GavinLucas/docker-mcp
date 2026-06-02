@@ -2,9 +2,9 @@
 
 from typing import Literal
 
-from server import mcp
-from tools._utils import drop_none
-from tools.client import _get_client
+from docker_mcp.server import mcp
+from docker_mcp.tools._utils import drop_none
+from docker_mcp.tools.client import _get_client
 
 
 @mcp.tool()

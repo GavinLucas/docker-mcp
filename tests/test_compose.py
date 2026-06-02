@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tools._cli import CliResult
-from tools.compose import (
+from docker_mcp.tools._cli import CliResult
+from docker_mcp.tools.compose import (
     _global_args,
     _parse_compose_json,
     compose_build,
@@ -24,7 +24,7 @@ from tools.compose import (
 def _stub_plugin_check():  # pyright: ignore[reportUnusedFunction]
     # Every test that calls `_run_compose` ultimately calls `require_plugin("compose")`.
     # We don't want those tests to shell out to a real `docker compose version` probe.
-    with patch("tools.compose.require_plugin"):
+    with patch("docker_mcp.tools.compose.require_plugin"):
         yield
 
 
@@ -82,7 +82,7 @@ def test_parse_compose_json_empty_returns_none():
 
 
 def test_compose_up_minimal_uses_detach():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_up()
     args = run.call_args.args[0]
     assert args[:2] == ["compose", "up"]
@@ -90,7 +90,7 @@ def test_compose_up_minimal_uses_detach():
 
 
 def test_compose_up_passes_global_flags_and_subcommand_flags():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_up(
             project_dir="/tmp/proj",
             files=["docker-compose.yml", "docker-compose.override.yml"],
@@ -122,7 +122,7 @@ def test_compose_up_passes_global_flags_and_subcommand_flags():
 
 
 def test_compose_down_includes_volumes_and_orphans_when_set():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_down(volumes=True, remove_orphans=True)
     args = run.call_args.args[0]
     assert "down" in args
@@ -135,7 +135,7 @@ def test_compose_down_includes_volumes_and_orphans_when_set():
 
 def test_compose_ps_parses_ndjson():
     body = '{"Name":"web","State":"running"}\n{"Name":"db","State":"running"}\n'
-    with patch("tools.compose.run_docker", return_value=_ok(body)):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok(body)):
         result = compose_ps()
     assert result["services"] == [
         {"Name": "web", "State": "running"},
@@ -145,13 +145,13 @@ def test_compose_ps_parses_ndjson():
 
 
 def test_compose_ps_handles_single_object_response():
-    with patch("tools.compose.run_docker", return_value=_ok('{"Name":"web"}')):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok('{"Name":"web"}')):
         result = compose_ps()
     assert result["services"] == [{"Name": "web"}]
 
 
 def test_compose_ps_returns_empty_services_on_failure():
-    with patch("tools.compose.run_docker", return_value=_fail("no such project")):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_fail("no such project")):
         result = compose_ps()
     assert result["services"] == []
     assert result["raw"]["returncode"] == 1
@@ -159,7 +159,7 @@ def test_compose_ps_returns_empty_services_on_failure():
 
 
 def test_compose_ps_passes_all_and_services():
-    with patch("tools.compose.run_docker", return_value=_ok("[]")) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok("[]")) as run:
         compose_ps(services=["web"], all=True)
     args = run.call_args.args[0]
     assert args[-3:] == ["--all", "web"] or args[-2:] == ["--all", "web"] or "--all" in args
@@ -169,7 +169,7 @@ def test_compose_ps_passes_all_and_services():
 
 
 def test_compose_logs_default_tail_and_no_color():
-    with patch("tools.compose.run_docker", return_value=_ok("hello")) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok("hello")) as run:
         result = compose_logs()
     args = run.call_args.args[0]
     assert "--no-color" in args
@@ -179,14 +179,14 @@ def test_compose_logs_default_tail_and_no_color():
 
 
 def test_compose_logs_tail_zero_means_all():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_logs(tail=0)
     args = run.call_args.args[0]
     assert args[args.index("--tail") + 1] == "all"
 
 
 def test_compose_logs_with_since_until_timestamps_services():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_logs(since="10m", until="2024-01-01T00:00:00", timestamps=True, services=["web"])
     args = run.call_args.args[0]
     assert args[args.index("--since") + 1] == "10m"
@@ -200,7 +200,7 @@ def test_compose_logs_with_since_until_timestamps_services():
 
 def test_compose_config_default_returns_yaml_text():
     yaml_text = "services:\n  web:\n    image: nginx\n"
-    with patch("tools.compose.run_docker", return_value=_ok(yaml_text)) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok(yaml_text)) as run:
         result = compose_config()
     args = run.call_args.args[0]
     assert "config" in args
@@ -209,7 +209,7 @@ def test_compose_config_default_returns_yaml_text():
 
 
 def test_compose_config_json_returns_parsed_dict():
-    with patch("tools.compose.run_docker", return_value=_ok('{"services": {"web": {}}}')) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok('{"services": {"web": {}}}')) as run:
         result = compose_config(format="json")
     args = run.call_args.args[0]
     assert args[args.index("--format") + 1] == "json"
@@ -217,7 +217,7 @@ def test_compose_config_json_returns_parsed_dict():
 
 
 def test_compose_config_services_only_lists_names():
-    with patch("tools.compose.run_docker", return_value=_ok("web\ndb\n")) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok("web\ndb\n")) as run:
         result = compose_config(services_only=True)
     args = run.call_args.args[0]
     assert "--services" in args
@@ -226,7 +226,7 @@ def test_compose_config_services_only_lists_names():
 
 
 def test_compose_config_returns_none_on_failure():
-    with patch("tools.compose.run_docker", return_value=_fail("invalid compose file")):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_fail("invalid compose file")):
         result = compose_config(format="json")
     assert result["config"] is None
     assert result["raw"]["returncode"] == 1
@@ -236,7 +236,7 @@ def test_compose_config_returns_none_on_failure():
 
 
 def test_compose_build_flags():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_build(pull=True, no_cache=True, services=["web"])
     args = run.call_args.args[0]
     assert "build" in args
@@ -246,7 +246,7 @@ def test_compose_build_flags():
 
 
 def test_compose_pull_ignore_failures():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_pull(ignore_pull_failures=True, services=["web", "db"])
     args = run.call_args.args[0]
     assert "pull" in args
@@ -255,7 +255,7 @@ def test_compose_pull_ignore_failures():
 
 
 def test_compose_restart_with_stop_timeout():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_restart(stop_timeout_seconds=30, services=["web"])
     args = run.call_args.args[0]
     assert "restart" in args
@@ -267,7 +267,7 @@ def test_compose_restart_with_stop_timeout():
 
 
 def test_compose_run_defaults_to_detach_rm_and_no_tty():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_run(service="web", command=["python", "-V"])
     args = run.call_args.args[0]
     assert args[:2] == ["compose", "run"]
@@ -280,7 +280,7 @@ def test_compose_run_defaults_to_detach_rm_and_no_tty():
 
 
 def test_compose_run_with_env_workdir_user_name():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_run(
             service="web",
             command=["sh", "-c", "echo hi"],
@@ -305,7 +305,7 @@ def test_compose_run_with_env_workdir_user_name():
 
 
 def test_compose_exec_uses_no_tty_and_passes_argv():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_exec(service="web", command=["ls", "/srv"])
     args = run.call_args.args[0]
     assert args[:2] == ["compose", "exec"]
@@ -315,7 +315,7 @@ def test_compose_exec_uses_no_tty_and_passes_argv():
 
 
 def test_compose_exec_with_index_workdir_user_env():
-    with patch("tools.compose.run_docker", return_value=_ok()) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok()) as run:
         compose_exec(
             service="web",
             command=["env"],
@@ -336,19 +336,19 @@ def test_compose_exec_with_index_workdir_user_env():
 
 def test_compose_ls_parses_array():
     body = '[{"Name":"demo","Status":"running(2)"}]'
-    with patch("tools.compose.run_docker", return_value=_ok(body)):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok(body)):
         result = compose_ls()
     assert result == [{"Name": "demo", "Status": "running(2)"}]
 
 
 def test_compose_ls_all_flag():
-    with patch("tools.compose.run_docker", return_value=_ok("[]")) as run:
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok("[]")) as run:
         compose_ls(all=True)
     args = run.call_args.args[0]
     assert "--all" in args
 
 
 def test_compose_ls_raises_on_failure():
-    with patch("tools.compose.run_docker", return_value=_fail("daemon unreachable")):
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_fail("daemon unreachable")):
         with pytest.raises(RuntimeError, match="daemon unreachable"):
             compose_ls()

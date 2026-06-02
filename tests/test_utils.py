@@ -1,6 +1,6 @@
 import pytest
 
-from tools._utils import drop_none, join_bounded
+from docker_mcp.tools._utils import drop_none, join_bounded
 
 
 def test_drop_none_filters_none_values():

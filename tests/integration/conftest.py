@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from docker.errors import DockerException
 
-from tools.client import ping
+from docker_mcp.tools.client import ping
 
 _INTEGRATION_DIR = Path(__file__).parent
 

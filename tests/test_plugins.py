@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from tools.plugins import (
+from docker_mcp.tools.plugins import (
     configure_plugin,
     disable_plugin,
     enable_plugin,
@@ -14,7 +14,7 @@ from tools.plugins import (
 
 
 def _patch():
-    return patch("tools.plugins._get_client")
+    return patch("docker_mcp.tools.plugins._get_client")
 
 
 def test_get_plugin():

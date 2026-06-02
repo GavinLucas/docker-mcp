@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from tools._cli import CliResult
-from tools.scout import (
+from docker_mcp.tools._cli import CliResult
+from docker_mcp.tools.scout import (
     _maybe_parse_json,
     scout_compare,
     scout_cves,
@@ -15,7 +15,7 @@ from tools.scout import (
 
 @pytest.fixture(autouse=True)
 def _stub_plugin_check():  # pyright: ignore[reportUnusedFunction]
-    with patch("tools.scout.require_plugin"):
+    with patch("docker_mcp.tools.scout.require_plugin"):
         yield
 
 
@@ -47,7 +47,7 @@ def test_maybe_parse_json_returns_raw_when_json_invalid():
 
 
 def test_scout_cves_minimal_args_and_default_json_format():
-    with patch("tools.scout.run_docker", return_value=_ok('{"vulnerabilities": []}')) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok('{"vulnerabilities": []}')) as run:
         result = scout_cves("alpine:3.19")
     args = run.call_args.args[0]
     assert args[:2] == ["scout", "cves"]
@@ -59,14 +59,14 @@ def test_scout_cves_minimal_args_and_default_json_format():
 
 
 def test_scout_cves_only_severity_joins_with_commas():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_cves("alpine:3.19", only_severity=["critical", "high"])
     args = run.call_args.args[0]
     assert args[args.index("--only-severity") + 1] == "critical,high"
 
 
 def test_scout_cves_flags_set_correctly():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_cves("alpine:3.19", only_fixed=True, ignore_base=True, platform="linux/amd64")
     args = run.call_args.args[0]
     assert "--only-fixed" in args
@@ -76,7 +76,7 @@ def test_scout_cves_flags_set_correctly():
 
 def test_scout_cves_sarif_format_returned_as_text():
     sarif_text = '{"$schema":"https://example.com/sarif"}'
-    with patch("tools.scout.run_docker", return_value=_ok(sarif_text)) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok(sarif_text)) as run:
         result = scout_cves("alpine:3.19", format="sarif")
     args = run.call_args.args[0]
     assert args[args.index("--format") + 1] == "sarif"
@@ -89,13 +89,13 @@ def test_scout_cves_sarif_format_returned_as_text():
 
 def test_scout_quickview_parses_json():
     body = '{"critical": 0, "high": 2}'
-    with patch("tools.scout.run_docker", return_value=_ok(body)):
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok(body)):
         result = scout_quickview("alpine:3.19")
     assert result["result"] == {"critical": 0, "high": 2}
 
 
 def test_scout_quickview_text_format_unparsed():
-    with patch("tools.scout.run_docker", return_value=_ok("Image: alpine:3.19\nCritical: 0")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("Image: alpine:3.19\nCritical: 0")) as run:
         result = scout_quickview("alpine:3.19", format="text")
     args = run.call_args.args[0]
     assert args[args.index("--format") + 1] == "text"
@@ -106,7 +106,7 @@ def test_scout_quickview_text_format_unparsed():
 
 
 def test_scout_recommendations_passes_only_flags():
-    with patch("tools.scout.run_docker", return_value=_ok("[]")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("[]")) as run:
         scout_recommendations("alpine:3.19", only_refresh=True, only_update=True, tag="3.*")
     args = run.call_args.args[0]
     assert "--only-refresh" in args
@@ -118,7 +118,7 @@ def test_scout_recommendations_passes_only_flags():
 
 
 def test_scout_compare_to_ref_target():
-    with patch("tools.scout.run_docker", return_value=_ok('{"delta": []}')) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok('{"delta": []}')) as run:
         scout_compare("org/app:v2", to="org/app:v1")
     args = run.call_args.args[0]
     assert args[:2] == ["scout", "compare"]
@@ -129,7 +129,7 @@ def test_scout_compare_to_ref_target():
 
 
 def test_scout_compare_to_latest_target():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_compare("org/app:v2", to_latest=True)
     args = run.call_args.args[0]
     assert "--to-latest" in args
@@ -137,7 +137,7 @@ def test_scout_compare_to_latest_target():
 
 
 def test_scout_compare_to_env_target():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_compare("org/app:v2", to_env="prod")
     args = run.call_args.args[0]
     assert args[args.index("--to-env") + 1] == "prod"
@@ -151,7 +151,7 @@ def test_scout_compare_requires_exactly_one_target():
 
 
 def test_scout_compare_ignore_unchanged_and_severity():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_compare("org/app:v2", to="org/app:v1", ignore_unchanged=True, only_severity=["critical"])
     args = run.call_args.args[0]
     assert "--ignore-unchanged" in args
@@ -163,7 +163,7 @@ def test_scout_compare_ignore_unchanged_and_severity():
 
 def test_scout_sbom_default_spdx_format_parses_json():
     body = '{"spdxVersion": "SPDX-2.3"}'
-    with patch("tools.scout.run_docker", return_value=_ok(body)) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok(body)) as run:
         result = scout_sbom("alpine:3.19")
     args = run.call_args.args[0]
     assert args[args.index("--format") + 1] == "spdx"
@@ -173,19 +173,19 @@ def test_scout_sbom_default_spdx_format_parses_json():
 
 def test_scout_sbom_cyclonedx_format_parses_json():
     body = '{"bomFormat": "CycloneDX"}'
-    with patch("tools.scout.run_docker", return_value=_ok(body)):
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok(body)):
         result = scout_sbom("alpine:3.19", format="cyclonedx")
     assert result["result"] == {"bomFormat": "CycloneDX"}
 
 
 def test_scout_sbom_list_format_returned_as_text():
-    with patch("tools.scout.run_docker", return_value=_ok("alpine 3.19\nlibc 2.39")):
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("alpine 3.19\nlibc 2.39")):
         result = scout_sbom("alpine:3.19", format="list")
     assert "libc 2.39" in result["result"]
 
 
 def test_scout_sbom_with_platform():
-    with patch("tools.scout.run_docker", return_value=_ok("{}")) as run:
+    with patch("docker_mcp.tools.scout.run_docker", return_value=_ok("{}")) as run:
         scout_sbom("alpine:3.19", platform="linux/arm64")
     args = run.call_args.args[0]
     assert args[args.index("--platform") + 1] == "linux/arm64"

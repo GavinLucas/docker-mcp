@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.resources import (
+from docker_mcp.tools.resources import (
     DOCKER_DOCS_BASE_URL,
     EXTERNAL_SECTIONS,
     SDK_SECTIONS,
@@ -35,7 +35,7 @@ def test_get_docs_section_fetches_sdk_section_at_base_url():
     response.read.return_value = b"<html>containers</html>"
     response.__enter__.return_value = response
     response.__exit__.return_value = False
-    with patch("tools.resources.urllib.request.urlopen", return_value=response) as mock_urlopen:
+    with patch("docker_mcp.tools.resources.urllib.request.urlopen", return_value=response) as mock_urlopen:
         result = get_docs_section("containers")
     assert result == "<html>containers</html>"
     mock_urlopen.assert_called_once_with(f"{DOCKER_DOCS_BASE_URL}/containers.html")
@@ -46,7 +46,7 @@ def test_get_docs_section_fetches_external_section_at_absolute_url():
     response.read.return_value = b"<html>compose</html>"
     response.__enter__.return_value = response
     response.__exit__.return_value = False
-    with patch("tools.resources.urllib.request.urlopen", return_value=response) as mock_urlopen:
+    with patch("docker_mcp.tools.resources.urllib.request.urlopen", return_value=response) as mock_urlopen:
         result = get_docs_section("compose")
     assert result == "<html>compose</html>"
     mock_urlopen.assert_called_once_with(EXTERNAL_SECTIONS["compose"])

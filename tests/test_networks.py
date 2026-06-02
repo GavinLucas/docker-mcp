@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from tools.networks import (
+from docker_mcp.tools.networks import (
     connect_network,
     create_network,
     disconnect_network,
@@ -12,7 +12,7 @@ from tools.networks import (
 
 
 def _patch():
-    return patch("tools.networks._get_client")
+    return patch("docker_mcp.tools.networks._get_client")
 
 
 def test_create_network():

@@ -3,7 +3,7 @@
 
 import pytest
 
-from tools.context import context_inspect, context_ls
+from docker_mcp.tools.context import context_inspect, context_ls
 
 
 def test_context_ls_returns_at_least_one_context():

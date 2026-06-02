@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from tools.volumes import create_volume, get_volume, list_volumes, prune_volumes, remove_volume
+from docker_mcp.tools.volumes import create_volume, get_volume, list_volumes, prune_volumes, remove_volume
 
 
 def _patch():
-    return patch("tools.volumes._get_client")
+    return patch("docker_mcp.tools.volumes._get_client")
 
 
 def test_create_volume():

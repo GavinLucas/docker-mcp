@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tools._cli import has_plugin
-from tools.compose import compose_config, compose_down, compose_ls, compose_ps, compose_up
+from docker_mcp.tools._cli import has_plugin
+from docker_mcp.tools.compose import compose_config, compose_down, compose_ls, compose_ps, compose_up
 
 # A tiny compose project: one alpine container that sleeps. Avoids pulling a large image
 # while still exercising the up/ps/down cycle.
@@ -56,7 +56,7 @@ def test_compose_config_json_parses(compose_project):
 
 def _pull_or_skip(compose_project):
     """Pull project images upfront. Skip the test if the registry can't be reached in a reasonable time."""
-    from tools.compose import compose_pull
+    from docker_mcp.tools.compose import compose_pull
 
     result = compose_pull(
         project_dir=compose_project["dir"],

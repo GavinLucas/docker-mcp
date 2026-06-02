@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from tools.services import (
+from docker_mcp.tools.services import (
     create_service,
     force_update_service,
     get_service,
@@ -14,7 +14,7 @@ from tools.services import (
 
 
 def _patch():
-    return patch("tools.services._get_client")
+    return patch("docker_mcp.tools.services._get_client")
 
 
 def test_create_service():

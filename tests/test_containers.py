@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.containers import (
+from docker_mcp.tools.containers import (
     commit_container,
     container_diff,
     container_logs,
@@ -33,7 +33,7 @@ from tools.containers import (
 
 
 def _patch():
-    return patch("tools.containers._get_client")
+    return patch("docker_mcp.tools.containers._get_client")
 
 
 def test_run_container_detached():

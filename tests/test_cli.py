@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import tools._cli as cli_module
-from tools._cli import (
+import docker_mcp.tools._cli as cli_module
+from docker_mcp.tools._cli import (
     MAX_CLI_OUTPUT_BYTES,
     CliResult,
     has_plugin,
@@ -30,8 +30,8 @@ def _fake_completed(stdout: bytes = b"", stderr: bytes = b"", returncode: int = 
 
 def test_run_docker_passes_argv_list_and_no_shell():
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed(b"hi\n")) as run,
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed(b"hi\n")) as run,
     ):
         result = run_docker(["ps", "-a"])
     assert isinstance(result, CliResult)
@@ -45,15 +45,15 @@ def test_run_docker_passes_argv_list_and_no_shell():
 
 
 def test_run_docker_raises_when_binary_missing():
-    with patch("tools._cli.shutil.which", return_value=None):
+    with patch("docker_mcp.tools._cli.shutil.which", return_value=None):
         with pytest.raises(FileNotFoundError, match="was not found on PATH"):
             run_docker(["version"])
 
 
 def test_run_docker_forwards_timeout_and_cwd_and_stdin():
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
     ):
         run_docker(["build", "-"], cwd="/tmp/ctx", timeout=300.0, stdin=b"FROM alpine")
     kwargs = run.call_args.kwargs
@@ -66,8 +66,8 @@ def test_run_docker_decodes_utf8_with_replace():
     # Half a UTF-8 surrogate followed by valid text — must not raise.
     payload = b"ok-\xff-end"
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed(stdout=payload)),
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed(stdout=payload)),
     ):
         result = run_docker(["version"])
     assert result.stdout.startswith("ok-")
@@ -78,8 +78,8 @@ def test_run_docker_decodes_utf8_with_replace():
 def test_run_docker_truncates_oversized_output():
     big = b"x" * (MAX_CLI_OUTPUT_BYTES + 100)
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed(stdout=big)),
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed(stdout=big)),
     ):
         result = run_docker(["logs", "x"])
     assert len(result.stdout) == MAX_CLI_OUTPUT_BYTES
@@ -89,8 +89,8 @@ def test_run_docker_truncates_oversized_output():
 def test_run_docker_truncated_flag_set_when_only_stderr_overflows():
     big = b"e" * (MAX_CLI_OUTPUT_BYTES + 1)
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed(stderr=big, returncode=1)),
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed(stderr=big, returncode=1)),
     ):
         result = run_docker(["version"])
     assert result.truncated is True
@@ -102,8 +102,8 @@ def test_run_docker_env_allowlist_drops_unrelated_vars(monkeypatch):
     monkeypatch.setenv("MY_SECRET", "leak-me")
     monkeypatch.setenv("PATH", "/usr/bin")
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
     ):
         run_docker(["version"])
     env = run.call_args.kwargs["env"]
@@ -115,8 +115,8 @@ def test_run_docker_env_allowlist_drops_unrelated_vars(monkeypatch):
 def test_run_docker_extra_env_overlays_allowlist(monkeypatch):
     monkeypatch.setenv("PATH", "/usr/bin")
     with (
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
     ):
         run_docker(["compose", "up"], extra_env={"COMPOSE_PROJECT_NAME": "demo"})
     env = run.call_args.kwargs["env"]
@@ -126,10 +126,10 @@ def test_run_docker_extra_env_overlays_allowlist(monkeypatch):
 def test_run_docker_windows_sets_create_no_window():
     fake_flag = 0x08000000  # actual value of CREATE_NO_WINDOW; arbitrary for the test
     with (
-        patch("tools._cli.sys.platform", "win32"),
+        patch("docker_mcp.tools._cli.sys.platform", "win32"),
         patch.object(cli_module.subprocess, "CREATE_NO_WINDOW", fake_flag, create=True),
-        patch("tools._cli.shutil.which", return_value=r"C:\Program Files\Docker\docker.exe"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.shutil.which", return_value=r"C:\Program Files\Docker\docker.exe"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
     ):
         run_docker(["version"])
     assert run.call_args.kwargs["creationflags"] == fake_flag
@@ -137,31 +137,31 @@ def test_run_docker_windows_sets_create_no_window():
 
 def test_run_docker_non_windows_creationflags_zero():
     with (
-        patch("tools._cli.sys.platform", "linux"),
-        patch("tools._cli.shutil.which", return_value="/usr/bin/docker"),
-        patch("tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.sys.platform", "linux"),
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
     ):
         run_docker(["version"])
     assert run.call_args.kwargs["creationflags"] == 0
 
 
 def test_has_plugin_true_when_version_exits_zero():
-    with patch("tools._cli.run_docker", return_value=CliResult(0, "v2.30", "", False)):
+    with patch("docker_mcp.tools._cli.run_docker", return_value=CliResult(0, "v2.30", "", False)):
         assert has_plugin("compose") is True
 
 
 def test_has_plugin_false_when_version_exits_nonzero():
-    with patch("tools._cli.run_docker", return_value=CliResult(1, "", "no plugin", False)):
+    with patch("docker_mcp.tools._cli.run_docker", return_value=CliResult(1, "", "no plugin", False)):
         assert has_plugin("compose") is False
 
 
 def test_has_plugin_false_when_binary_missing():
-    with patch("tools._cli.run_docker", side_effect=FileNotFoundError("nope")):
+    with patch("docker_mcp.tools._cli.run_docker", side_effect=FileNotFoundError("nope")):
         assert has_plugin("compose") is False
 
 
 def test_has_plugin_false_on_timeout():
-    with patch("tools._cli.run_docker", side_effect=subprocess.TimeoutExpired(cmd="docker", timeout=10)):
+    with patch("docker_mcp.tools._cli.run_docker", side_effect=subprocess.TimeoutExpired(cmd="docker", timeout=10)):
         assert has_plugin("compose") is False
 
 
@@ -172,7 +172,7 @@ def test_has_plugin_is_cached():
         call_count["n"] += 1
         return CliResult(0, "v1", "", False)
 
-    with patch("tools._cli.run_docker", side_effect=fake_run):
+    with patch("docker_mcp.tools._cli.run_docker", side_effect=fake_run):
         has_plugin("compose")
         has_plugin("compose")
         has_plugin("compose")
@@ -180,13 +180,13 @@ def test_has_plugin_is_cached():
 
 
 def test_require_plugin_raises_when_missing():
-    with patch("tools._cli.has_plugin", return_value=False):
+    with patch("docker_mcp.tools._cli.has_plugin", return_value=False):
         with pytest.raises(RuntimeError, match="'buildx' is not installed"):
             require_plugin("buildx")
 
 
 def test_require_plugin_silent_when_present():
-    with patch("tools._cli.has_plugin", return_value=True):
+    with patch("docker_mcp.tools._cli.has_plugin", return_value=True):
         require_plugin("compose")
 
 

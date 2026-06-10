@@ -104,17 +104,17 @@ def test_is_truthy():
 # ---------- end-to-end registration under the env switches (separate processes) ----------
 
 
-def _count_registered(env_var: str | None) -> int:
-    code = "import docker_mcp; from docker_mcp.server import mcp; print(len(mcp._tool_manager._tools))"
-    env_args = [env_var] if env_var else []
+def _registered_names(env_vars: list[str]) -> set[str]:
+    """Import the package in a child process with the given env assignments; return the tool names."""
+    code = "import docker_mcp; from docker_mcp.server import mcp; print('\\n'.join(mcp._tool_manager._tools))"
     result = subprocess.run(  # noqa: S603 — fixed argv, sys.executable, no shell; trusted test input
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
-        env=_env_with(env_args),
+        env=_env_with(env_vars),
         check=True,
     )
-    return int(result.stdout.strip())
+    return {line for line in result.stdout.splitlines() if line}
 
 
 def _env_with(assignments: list[str]) -> dict:
@@ -130,18 +130,33 @@ def _env_with(assignments: list[str]) -> dict:
     return env
 
 
-def test_readonly_env_registers_only_read_only_tools():
-    expected = sum(1 for c in TOOL_CATEGORIES.values() if c is ToolCategory.READ_ONLY)
-    assert _count_registered("DOCKER_MCP_READONLY=1") == expected
+def _names_by_category(*categories: ToolCategory) -> set[str]:
+    return {name for name, c in TOOL_CATEGORIES.items() if c in categories}
 
 
-def test_no_destructive_env_drops_destructive_tools():
-    destructive = sum(1 for c in TOOL_CATEGORIES.values() if c is ToolCategory.DESTRUCTIVE)
-    assert _count_registered("DOCKER_MCP_NO_DESTRUCTIVE=1") == len(TOOL_CATEGORIES) - destructive
+def test_readonly_env_registers_exactly_the_read_only_tools():
+    # Exact set comparison, not a count: registering the right number of wrong tools must fail.
+    assert _registered_names(["DOCKER_MCP_READONLY=1"]) == _names_by_category(ToolCategory.READ_ONLY)
+
+
+def test_no_destructive_env_registers_exactly_the_non_destructive_tools():
+    expected = _names_by_category(ToolCategory.READ_ONLY, ToolCategory.MUTATING)
+    assert _registered_names(["DOCKER_MCP_NO_DESTRUCTIVE=1"]) == expected
 
 
 def test_default_env_registers_all_tools():
-    assert _count_registered(None) == len(TOOL_CATEGORIES)
+    assert _registered_names([]) == set(TOOL_CATEGORIES)
+
+
+def test_both_switches_set_readonly_wins_end_to_end():
+    # The precedence rule (_should_register unit-tests it) must hold through real registration too.
+    names = _registered_names(["DOCKER_MCP_READONLY=1", "DOCKER_MCP_NO_DESTRUCTIVE=1"])
+    assert names == _names_by_category(ToolCategory.READ_ONLY)
+
+
+def test_truthy_spelling_accepted_end_to_end():
+    # The switches accept "true"/"yes"/"on" spellings, not just "1".
+    assert _registered_names(["DOCKER_MCP_READONLY=true"]) == _names_by_category(ToolCategory.READ_ONLY)
 
 
 # ---------- typed parameter schemas ----------

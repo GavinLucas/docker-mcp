@@ -265,7 +265,10 @@ def test_buildx_imagetools_create_requires_sources_or_files():
 
 
 def test_buildx_ls_parses_ndjson():
-    body = '{"Name":"default","Driver":"docker","Current":true}\n{"Name":"remote","Driver":"docker-container","Current":false}\n'
+    body = (
+        '{"Name":"default","Driver":"docker","Current":true}\n'
+        '{"Name":"remote","Driver":"docker-container","Current":false}\n'
+    )
     with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok(body)) as run:
         result = buildx_ls()
     args = run.call_args.args[0]

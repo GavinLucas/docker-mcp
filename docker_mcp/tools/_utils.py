@@ -1,6 +1,7 @@
 # internal helpers shared across tool modules
 
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 # Default cap (1 GiB) for tools that accumulate daemon-side byte streams in memory.
 MAX_PAYLOAD_BYTES = 1_073_741_824

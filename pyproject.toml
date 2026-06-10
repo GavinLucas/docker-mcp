@@ -28,8 +28,16 @@ constraint-dependencies = ["urllib3>=2.7.0"]
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint]
+# E/F = pycodestyle + pyflakes (ruff defaults), B = flake8-bugbear, S = flake8-bandit
+# (security; gives the S603/S310 noqas in _cli.py / resources.py teeth), UP = pyupgrade.
+select = ["E", "F", "B", "S", "UP"]
+
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
+# Tests legitimately use assert (S101), hardcoded fixture secrets (S105/S106),
+# and /tmp paths as plain string fixtures, not real file operations (S108).
+"tests/**" = ["S101", "S105", "S106", "S108"]
 
 [tool.pyright]
 include = ["docker_mcp", "tests"]

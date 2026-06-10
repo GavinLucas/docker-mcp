@@ -5,10 +5,12 @@ import httpx
 import pytest
 
 from docker_mcp.tools.registry import (
+    _is_local_host,
     _next_link,
     _parse_bearer_challenge,
     _parse_image_ref,
     _strip_tag_and_digest,
+    _validate_bearer_realm,
     hub_list_tags,
     hub_repo_info,
     registry_inspect_manifest,
@@ -97,6 +99,75 @@ def test_parse_bearer_challenge_wrong_scheme_returns_empty():
 
 def test_parse_bearer_challenge_empty_input():
     assert _parse_bearer_challenge("") == {}
+
+
+# ---------- _is_local_host ----------
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "localhost",
+        "LOCALHOST",
+        "foo.local",
+        "svc.internal",
+        "127.0.0.1",
+        "::1",
+        "10.1.2.3",
+        "192.168.0.5",
+        "169.254.1.1",
+    ],
+)
+def test_is_local_host_true_for_local_and_private(host):
+    assert _is_local_host(host) is True
+
+
+@pytest.mark.parametrize("host", ["", "ghcr.io", "auth.docker.io", "8.8.8.8", "1.1.1.1", "registry.example.com"])
+def test_is_local_host_false_for_public(host):
+    assert _is_local_host(host) is False
+
+
+# ---------- _validate_bearer_realm ----------
+
+
+def test_validate_bearer_realm_allows_https_public():
+    _validate_bearer_realm("https://auth.docker.io/token", "registry-1.docker.io")
+
+
+def test_validate_bearer_realm_allows_local_realm_for_local_registry():
+    # A genuine dev registry on localhost may legitimately use a local (even http) token endpoint.
+    _validate_bearer_realm("http://localhost:5000/token", "localhost:5000")
+    _validate_bearer_realm("https://127.0.0.1/token", "127.0.0.1:5000")
+
+
+def test_validate_bearer_realm_rejects_plaintext_http_to_public_host():
+    with pytest.raises(RuntimeError, match="plaintext http"):
+        _validate_bearer_realm("http://auth.evil.com/token", "registry-1.docker.io")
+
+
+def test_validate_bearer_realm_rejects_non_http_scheme():
+    with pytest.raises(RuntimeError, match="unsupported scheme"):
+        _validate_bearer_realm("file:///etc/passwd", "registry-1.docker.io")
+
+
+def test_validate_bearer_realm_rejects_private_realm_for_public_registry():
+    # Public registry trying to redirect credentialed requests to an internal host = SSRF.
+    with pytest.raises(RuntimeError, match="possible SSRF"):
+        _validate_bearer_realm("https://169.254.169.254/token", "registry-1.docker.io")
+
+
+def test_registry_list_tags_rejects_malicious_http_realm():
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Public registry hands back a plaintext-http token realm; the tool must refuse to
+        # contact it (and never send credentials) rather than following the challenge.
+        return httpx.Response(
+            401,
+            headers={"WWW-Authenticate": 'Bearer realm="http://auth.evil.com/token",service="reg.example.com"'},
+        )
+
+    with _mock_client(handler):
+        with pytest.raises(RuntimeError, match="plaintext http"):
+            registry_list_tags("reg.example.com/foo/bar", username="u", password="p")
 
 
 # ---------- _next_link ----------

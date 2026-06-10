@@ -6,9 +6,11 @@
 
 import datetime
 import email.utils
+import ipaddress
 import re
 import time
 from typing import Any, NoReturn
+from urllib.parse import urlparse
 
 import httpx
 
@@ -93,16 +95,77 @@ def _parse_bearer_challenge(header: str) -> dict[str, str]:
     return out
 
 
+def _host_of(netloc: str) -> str:
+    """Extract the bare host from a "host", "host:port", or "[ipv6]:port" netloc."""
+    return urlparse(f"//{netloc}").hostname or netloc
+
+
+def _is_local_host(host: str) -> bool:
+    """
+    True if `host` is a loopback / private / link-local address or an obvious local name.
+
+    Used to decide whether sending registry credentials to a token realm is safe. This is a
+    best-effort, no-DNS check: it recognizes IP literals and the conventional local-name suffixes
+    (localhost, *.local, *.internal) but does not resolve bare hostnames, so an internal host
+    addressed by a plain name that doesn't match those suffixes is treated as non-local.
+    """
+    if not host:
+        return False
+    h = host.lower().rstrip(".")
+    if h == "localhost" or h.endswith((".localhost", ".local", ".internal")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_unspecified
+
+
+def _validate_bearer_realm(realm: str, registry: str) -> None:
+    """
+    Reject a token realm that would leak credentials in plaintext or to an internal host.
+
+    The realm is attacker-controlled — it comes from the registry's `WWW-Authenticate` header — and
+    we are about to send (possibly authenticated) requests to it. We therefore require:
+      - an http/https scheme (no file://, gopher://, etc.);
+      - https whenever the realm host is not local (plaintext to a public host would leak creds);
+      - the realm host to be public, unless the registry we're talking to is itself local — this
+        stops a public registry from redirecting credentialed requests at an internal service (SSRF),
+        while still allowing a genuinely local dev registry (e.g. localhost:5000) to use a local realm.
+    """
+    parsed = urlparse(realm)
+    if parsed.scheme not in ("http", "https"):
+        raise RuntimeError(
+            f"Registry bearer realm {realm!r} has an unsupported scheme {parsed.scheme!r}; "
+            f"refusing to send credentials. Only http/https token endpoints are allowed."
+        )
+    realm_host = parsed.hostname or ""
+    if parsed.scheme != "https" and not _is_local_host(realm_host):
+        raise RuntimeError(
+            f"Registry bearer realm {realm!r} is plaintext http to a non-local host; refusing to "
+            f"send credentials over an unencrypted connection. A legitimate public registry uses an "
+            f"https token endpoint."
+        )
+    if _is_local_host(realm_host) and not _is_local_host(_host_of(registry)):
+        raise RuntimeError(
+            f"Registry {registry!r} pointed its token realm at a private/loopback host ({realm_host!r}); "
+            f"refusing to send credentials to an internal address on behalf of a public registry "
+            f"(possible SSRF)."
+        )
+
+
 def _get_bearer_token(
     client: httpx.Client,
     challenge: dict[str, str],
     *,
     username: str | None,
     password: str | None,
+    registry: str,
 ) -> str:
     realm = challenge.get("realm")
     if not realm:
         raise RuntimeError("Registry bearer challenge missing 'realm' parameter; cannot authenticate.")
+    _validate_bearer_realm(realm, registry)
     params: dict[str, str] = {}
     if "service" in challenge:
         params["service"] = challenge["service"]
@@ -220,7 +283,7 @@ def _registry_get(
             challenge = _parse_bearer_challenge(resp.headers.get("WWW-Authenticate", ""))
             if not challenge:
                 resp.raise_for_status()
-            token = _get_bearer_token(client, challenge, username=username, password=password)
+            token = _get_bearer_token(client, challenge, username=username, password=password, registry=registry)
             headers["Authorization"] = f"Bearer {token}"
             resp = _get_with_429_policy(client, url, headers=headers)
         resp.raise_for_status()
@@ -288,8 +351,6 @@ def registry_list_tags(
             path = None
         elif next_url.startswith("http://") or next_url.startswith("https://"):
             # Link header may be absolute; strip the scheme+host to keep going through _registry_get.
-            from urllib.parse import urlparse
-
             parsed = urlparse(next_url)
             path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
         else:

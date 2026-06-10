@@ -399,3 +399,27 @@ def test_put_container_archive_from_file_streams_handle(tmp_path):
     call = container.put_archive.call_args
     assert call.args[0] == "/dest"
     assert hasattr(call.args[1], "read")  # an open file handle, not raw bytes
+
+
+def test_follow_container_logs_returns_collected_when_stream_close_raises():
+    # ssh:// daemons: CancellableStream.close() raises in the finally — the collected lines must
+    # still be returned rather than the close error replacing them.
+    class _FiniteRaisingCloseStream:
+        def __init__(self):
+            self._it = iter([b"line1\n", b"line2\n"])
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self._it)
+
+        def close(self):
+            raise RuntimeError("Cancellable streams not supported for the SSH protocol")
+
+    container = MagicMock()
+    container.logs.return_value = _FiniteRaisingCloseStream()
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = follow_container_logs("web", limit_lines=200)
+    assert result == "line1\nline2"

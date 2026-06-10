@@ -141,6 +141,10 @@ def events(
     than `limit` events, no `until`) would block the tool call indefinitely, since the event stream
     only yields when an event actually occurs.
 
+    Caveat for `ssh://` daemons: docker-py cannot cancel an SSH stream, so the `timeout_seconds`
+    watchdog can't interrupt a fully idle stream there — bound the call with `until` / `limit` (or a
+    non-SSH endpoint) if you need a hard time limit against an SSH daemon.
+
     args:
         since: str - Show events created since this timestamp
         until: str - Show events created until this timestamp

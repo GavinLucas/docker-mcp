@@ -585,3 +585,33 @@ def test_registry_list_tags_uses_env_credentials_for_token_auth(monkeypatch):
     assert result["tags"] == ["v1"]
     # The env credentials were sent (basic auth) to the token endpoint without transiting tool args.
     assert saw_auth["header"].startswith("Basic ")
+
+
+def test_registry_inspect_manifest_uses_env_credentials_for_token_auth(monkeypatch):
+    # Same env-fallback flow as registry_list_tags, but through the manifest endpoint — both tools
+    # share _env_credentials + _registry_get, and both must keep credentials out of tool arguments.
+    monkeypatch.setenv("DOCKER_MCP_REGISTRY_USERNAME", "envuser")
+    monkeypatch.setenv("DOCKER_MCP_REGISTRY_PASSWORD", "envpass")
+    saw_auth = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "auth.example.com":
+            saw_auth["header"] = request.headers.get("Authorization", "")
+            return httpx.Response(200, json={"token": "tok"})
+        if "Authorization" not in request.headers:
+            return httpx.Response(
+                401,
+                headers={"WWW-Authenticate": 'Bearer realm="https://auth.example.com/token",service="reg.example.com"'},
+            )
+        assert request.url.path == "/v2/foo/bar/manifests/v2"
+        return httpx.Response(
+            200,
+            json={"schemaVersion": 2},
+            headers={"Content-Type": "application/vnd.oci.image.manifest.v1+json", "Docker-Content-Digest": "sha256:d"},
+        )
+
+    with _mock_client(handler):
+        result = registry_inspect_manifest("reg.example.com/foo/bar", reference="v2")
+    assert result["manifest"] == {"schemaVersion": 2}
+    assert result["digest"] == "sha256:d"
+    assert saw_auth["header"].startswith("Basic ")

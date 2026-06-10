@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests.exceptions
+from docker.errors import DockerException
 
 from docker_mcp.tools.containers import (
     commit_container,
@@ -415,7 +416,7 @@ def test_follow_container_logs_returns_collected_when_stream_close_raises():
             return next(self._it)
 
         def close(self):
-            raise RuntimeError("Cancellable streams not supported for the SSH protocol")
+            raise DockerException("Cancellable streams not supported for the SSH protocol")
 
     container = MagicMock()
     container.logs.return_value = _FiniteRaisingCloseStream()

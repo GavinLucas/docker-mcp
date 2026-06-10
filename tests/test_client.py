@@ -180,7 +180,7 @@ def test_events_returns_collected_when_stream_close_raises():
             return next(self._it)
 
         def close(self):
-            raise RuntimeError("Cancellable streams not supported for the SSH protocol")
+            raise DockerException("Cancellable streams not supported for the SSH protocol")
 
     mock_client = MagicMock()
     mock_client.events.return_value = _FiniteRaisingCloseStream()

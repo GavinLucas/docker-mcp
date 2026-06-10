@@ -20,15 +20,21 @@ def close_stream_quietly(stream: Any) -> None:
     Used by the log/event tools that arm a watchdog timer to `stream.close()` on a wall-clock
     deadline: when the tool finishes first we still close to free the socket, and a close that
     races with the timer (or a stream that's already shut down) must not surface as an error.
+
+    Catches broadly on purpose: docker-py's `CancellableStream.close()` reaches into the response's
+    private socket internals, so beyond the expected `OSError` (already-shut-down socket) it can
+    raise `AttributeError` on transports whose internals differ, and it *always* raises
+    `DockerException` for an `ssh://` daemon (SSH streams aren't cancellable). This helper runs in a
+    watchdog-timer thread and in tool `finally` blocks, so none of those may escape — mirrors
+    `client.py:_close_client_quietly`.
     """
     close = getattr(stream, "close", None)
     if close is None:
         return
     try:
         close()
-    except OSError:
-        # Socket already shut down (e.g. our close() raced the watchdog timer) — nothing to do.
-        pass  # noqa: S110 — intentional: a redundant close is a no-op, not a failure
+    except Exception:  # noqa: S110, BLE001 — best-effort close; see docstring for why it's broad
+        pass
 
 
 def drop_none(**kwargs: Any) -> dict[str, Any]:

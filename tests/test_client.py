@@ -164,3 +164,26 @@ def test_reconnect_keeps_old_client_when_new_endpoint_unreachable():
     new_client.close.assert_called_once()
     old_client.close.assert_not_called()
     client_module._client = None
+
+
+def test_events_returns_collected_when_stream_close_raises():
+    # On an ssh:// daemon CancellableStream.close() raises in the finally; the collected events must
+    # still be returned rather than the close error replacing them.
+    class _FiniteRaisingCloseStream:
+        def __init__(self):
+            self._it = iter([{"event": "a"}, {"event": "b"}])
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            return next(self._it)
+
+        def close(self):
+            raise DockerException("Cancellable streams not supported for the SSH protocol")
+
+    mock_client = MagicMock()
+    mock_client.events.return_value = _FiniteRaisingCloseStream()
+    with patch("docker_mcp.tools.client._get_client", return_value=mock_client):
+        result = events(limit=10)
+    assert result == [{"event": "a"}, {"event": "b"}]

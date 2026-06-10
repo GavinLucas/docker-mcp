@@ -344,6 +344,10 @@ def follow_container_logs(
     `timeout_seconds` bounds wall-clock time, which matters for a quiet but long-lived container
     that would otherwise never emit the line that lets the call return.
 
+    Caveat for `ssh://` daemons: docker-py cannot cancel an SSH stream, so the `timeout_seconds`
+    watchdog can't interrupt a fully silent container there — use `container_logs` (a one-shot,
+    non-streaming read) against an SSH daemon if you need a hard time bound.
+
     args:
         id_or_name: str - The container id or name
         limit_lines: int - Maximum number of lines to collect before returning (default 200)

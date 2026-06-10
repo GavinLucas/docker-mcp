@@ -1,6 +1,51 @@
 import pytest
+from docker.errors import DockerException
 
-from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded, stream_to_file
+from docker_mcp.tools._utils import (
+    MAX_PAYLOAD_BYTES,
+    close_stream_quietly,
+    drop_none,
+    join_bounded,
+    stream_to_file,
+)
+
+
+# ---------- close_stream_quietly ----------
+
+
+def test_close_stream_quietly_noop_without_close_method():
+    close_stream_quietly(object())  # no .close() — must not raise
+
+
+def test_close_stream_quietly_calls_close():
+    class _S:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    s = _S()
+    close_stream_quietly(s)
+    assert s.closed
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        OSError("shut down"),  # already-closed socket
+        AttributeError("_sock"),  # transport internals differ
+        DockerException("Cancellable streams not supported for the SSH protocol"),  # ssh:// daemon
+    ],
+)
+def test_close_stream_quietly_swallows_any_close_error(exc):
+    # These are the real CancellableStream.close() failure modes; none may escape this best-effort
+    # helper. DockerException in particular is what docker-py raises on every ssh:// close.
+    class _S:
+        def close(self):
+            raise exc
+
+    close_stream_quietly(_S())  # must not raise
 
 
 def test_drop_none_filters_none_values():

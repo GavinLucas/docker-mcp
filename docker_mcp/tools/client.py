@@ -38,7 +38,7 @@ def _get_client() -> docker.DockerClient:
         if _client is None:
             try:
                 _client = docker.from_env()
-            except DockerException as exc:
+            except _CONNECT_ERRORS as exc:
                 host = os.environ.get("DOCKER_HOST", "default unix socket")
                 raise RuntimeError(
                     f"Cannot reach the Docker daemon at {host}. Is Docker running, "
@@ -186,22 +186,14 @@ def close() -> bool:
 @mcp.tool()
 def reconnect(docker_host: str | None = None) -> dict:
     """
-    Rebuild the Docker SDK client, optionally pointing it at a different daemon.
+    Rebuild the shared Docker SDK client, optionally retargeting it at a different daemon.
 
-    The SDK-backed tools share one long-lived docker-py client created at server startup, so
-    `context_use` and a changed `DOCKER_HOST` do not retarget them. This tool rebuilds that client:
-    pass `docker_host` (e.g. "tcp://10.0.0.5:2376", "ssh://user@host", "unix:///var/run/docker.sock")
-    to switch daemons, or omit it to rebuild from the current environment (useful to recover a client
-    whose connection has gone bad). The new client is validated by querying the daemon *before* the
-    old one is swapped out and closed, so a bad endpoint leaves the working client in place.
+    Validates the new endpoint before swapping out and closing the old client, so a bad target
+    leaves the working one in place. Security: retargeting moves a root-equivalent trust boundary
+    and `docker_host` is logged like any argument — see README "Security considerations".
 
-    Security: retargeting moves the trust boundary. The Docker socket is root-equivalent on its host,
-    so only point this at a daemon the agent is authorized to control. `docker_host` is logged like
-    any tool argument; an `ssh://` target relies on the server's SSH agent/known_hosts.
-
-    args:
-        docker_host: str - Daemon URL to connect to, or None to rebuild from the environment
-    returns: dict - The new daemon's version info (the same shape as `version`), confirming connectivity
+    args: docker_host: str | None - Daemon URL to connect to, or None to rebuild from the environment
+    returns: dict - The new daemon's version info (same shape as `version`), confirming connectivity
     """
     global _client
     target = docker_host or os.environ.get("DOCKER_HOST", "the default Docker socket")

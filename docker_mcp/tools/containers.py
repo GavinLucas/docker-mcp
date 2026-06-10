@@ -1,6 +1,7 @@
 # library of mcp tools relating to container management
 
-from typing import Iterable, Literal, cast
+from typing import Literal, cast
+from collections.abc import Iterable
 
 from docker_mcp.server import mcp
 from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded

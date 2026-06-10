@@ -143,7 +143,7 @@ def _parse_retry_after(value: str | None) -> float | None:
     # a naive datetime when the source said `-0000` (and only then); naive `.timestamp()`
     # would re-interpret in local time and skew the delay. Force UTC explicitly.
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        parsed = parsed.replace(tzinfo=datetime.UTC)
     delta = parsed.timestamp() - time.time()
     return max(0.0, delta)
 

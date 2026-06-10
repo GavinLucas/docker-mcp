@@ -95,3 +95,63 @@ def test_stream_to_file_overwrite_replaces(tmp_path):
     _, written = stream_to_file(iter([b"new!"]), str(dest), overwrite=True)
     assert written == 4
     assert dest.read_bytes() == b"new!"
+
+
+def _raising_chunks():
+    yield b"partial-data"
+    raise RuntimeError("daemon disconnect")
+
+
+def test_stream_to_file_leaves_no_file_on_midstream_failure(tmp_path):
+    dest = tmp_path / "out.bin"
+    with pytest.raises(RuntimeError, match="daemon disconnect"):
+        stream_to_file(_raising_chunks(), str(dest))
+    assert not dest.exists()
+    # the sibling temp file is cleaned up too — no .partial leftovers
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_stream_to_file_preserves_original_on_failure_even_with_overwrite(tmp_path):
+    dest = tmp_path / "out.bin"
+    dest.write_bytes(b"original")
+    with pytest.raises(RuntimeError, match="daemon disconnect"):
+        stream_to_file(_raising_chunks(), str(dest), overwrite=True)
+    # temp+replace means the original is never truncated until a complete write succeeds
+    assert dest.read_bytes() == b"original"
+    assert [p.name for p in tmp_path.iterdir()] == ["out.bin"]
+
+
+class _ClosingChunks:
+    """An iterator that records whether close() was called — to assert streams aren't leaked."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._it = iter(chunks)
+        self.closed = False
+
+    def __iter__(self) -> _ClosingChunks:
+        return self
+
+    def __next__(self) -> bytes:
+        return next(self._it)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_join_bounded_closes_stream_on_success():
+    chunks = _ClosingChunks([b"a", b"b"])
+    join_bounded(chunks, max_bytes=100, what="test")
+    assert chunks.closed
+
+
+def test_join_bounded_closes_stream_on_abort():
+    chunks = _ClosingChunks([b"x" * 10, b"y" * 10])
+    with pytest.raises(ValueError, match="exceeded max_bytes"):
+        join_bounded(chunks, max_bytes=5, what="test")
+    assert chunks.closed
+
+
+def test_stream_to_file_closes_stream(tmp_path):
+    chunks = _ClosingChunks([b"a", b"b"])
+    stream_to_file(chunks, str(tmp_path / "o.bin"))
+    assert chunks.closed

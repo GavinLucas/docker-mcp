@@ -1,11 +1,16 @@
 # library of mcp resources for viewing docker SDK and CLI-feature documentation
 
 import json
-import urllib.request
+
+import httpx
 
 from docker_mcp.server import mcp
 
 DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
+
+# Bounded wait for a docs fetch — a stalled readthedocs connection must not hang the resource read.
+_DOCS_TIMEOUT = 30.0
+_USER_AGENT = "docker-mcp/0.1"
 
 # Sections served from the docker-py SDK documentation. Each maps to
 # DOCKER_DOCS_BASE_URL/<section>.html for backwards compatibility.
@@ -94,5 +99,6 @@ def get_docs_section(section: str) -> str:
     returns: str - The HTML (or rendered Markdown) content of the documentation page
     """
     url = _section_url(section)
-    with urllib.request.urlopen(url) as response:  # noqa: S310 — URL is built from a static allow-list
-        return response.read().decode("utf-8", errors="replace")
+    resp = httpx.get(url, timeout=_DOCS_TIMEOUT, follow_redirects=True, headers={"User-Agent": _USER_AGENT})
+    resp.raise_for_status()
+    return resp.content.decode("utf-8", errors="replace")

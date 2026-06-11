@@ -685,3 +685,38 @@ def restore_volume(volume: str, source_path: str) -> str:
         f'Verify with `exec_in_container(<helper>, ["ls", "/data"])` (before removing it) or a quick '
         f"`alpine ls` helper, confirming the expected files are present. Report what was restored."
     )
+
+
+@mcp.prompt(description="Deploy a Compose file to a swarm as a stack and verify the rollout.")
+def deploy_swarm_stack(stack_name: str, compose_file: str) -> str:
+    """
+    Generate a plan for deploying a Compose file to a swarm as a stack and confirming it converged.
+
+    args:
+        stack_name: str - The stack name to create or update
+        compose_file: str - Path to the Compose file to deploy
+    returns: str - A prompt instructing the agent to validate, deploy, and verify the stack
+    """
+    return (
+        f"Deploy `{compose_file}` to the swarm as stack `{stack_name}` and verify it converges:\n"
+        f"1. Confirm the daemon is a swarm manager before anything else — call `info` and check "
+        f"`Swarm.LocalNodeState == 'active'` and `Swarm.ControlAvailable == true`. `docker stack` only "
+        f"works against a manager; if it isn't one, stop and tell the user (init with `init_swarm` or "
+        f"point `DOCKER_HOST` at a manager).\n"
+        f'2. Sanity-check the Compose file first: call `compose_config(files=["{compose_file}"], '
+        f'format="json")` to render it and surface what will be created. Flag anything risky — services '
+        f"with `privileged: true`, host bind mounts, or env that looks like a secret (prefer swarm "
+        f"`secrets`/`configs`). Note that some Compose keys are ignored by the swarm orchestrator "
+        f"(e.g. `depends_on`, `build`) — call those out.\n"
+        f'3. Deploy with `stack_deploy(stack_name="{stack_name}", compose_files=["{compose_file}"])`. Add '
+        f"`with_registry_auth=True` if any image is private, and `prune=True` only if the user wants "
+        f"services removed when they leave the Compose file. Check the returned `returncode`/`stderr`.\n"
+        f'4. Verify convergence: `stack_services(stack_name="{stack_name}")` and confirm each service\'s '
+        f"running replicas match its desired count. For any under-replicated service, "
+        f'`stack_ps(stack_name="{stack_name}", filters=["desired-state=running"])` and look for tasks '
+        f"stuck in `rejected`/`failed` — pull the task error.\n"
+        f"5. Re-running `stack_deploy` with the same name updates the stack in place, so iterate on the "
+        f"Compose file and redeploy rather than removing first. Mention `stack_rm` as the teardown, but "
+        f"do not call it.\n"
+        f"Report the per-service desired-vs-running replica counts and any task errors."
+    )

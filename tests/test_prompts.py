@@ -10,6 +10,7 @@ from docker_mcp.tools.prompts import (
     debug_container_networking,
     deploy_compose_project,
     deploy_container,
+    deploy_swarm_stack,
     find_latest_image_tag,
     inspect_multiarch_manifest,
     inspect_stack,
@@ -288,3 +289,18 @@ def test_restore_volume_confirms_clears_and_uses_root_path():
     # Must clear stale files before extracting, and extract at "/" (not /data) to avoid nesting.
     assert "exec_in_container" in out
     assert 'path="/"' in out
+
+
+def test_deploy_swarm_stack_validates_swarm_then_deploys_and_verifies():
+    out = deploy_swarm_stack("web", "/srv/app/docker-compose.yml")
+    assert "web" in out
+    assert "/srv/app/docker-compose.yml" in out
+    # Must confirm swarm-manager status before deploying.
+    assert out.index("info") < out.index("stack_deploy")
+    # Validate the compose file before mutating, then verify convergence after.
+    assert out.index("compose_config") < out.index("stack_deploy")
+    assert out.index("stack_deploy") < out.index("stack_services")
+    assert "stack_ps" in out
+    # Mentions teardown but does not invoke it.
+    assert "stack_rm" in out
+    assert "do not call it" in out.lower()

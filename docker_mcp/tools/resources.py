@@ -38,6 +38,8 @@ EXTERNAL_SECTIONS: dict[str, str] = {
     "compose-file": "https://docs.docker.com/reference/compose-file/",
     "context": "https://docs.docker.com/engine/manage-resources/contexts/",
     "context-cli": "https://docs.docker.com/reference/cli/docker/context/",
+    "stack": "https://docs.docker.com/engine/swarm/stack-deploy/",
+    "stack-cli": "https://docs.docker.com/reference/cli/docker/stack/",
     "registry-api": "https://distribution.github.io/distribution/spec/api/",
     "oci-distribution-spec": "https://github.com/opencontainers/distribution-spec/blob/main/spec.md",
     "hub-api": "https://docs.docker.com/reference/api/hub/latest/",

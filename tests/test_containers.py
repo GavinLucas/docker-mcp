@@ -1,4 +1,5 @@
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -506,3 +507,21 @@ def test_wait_for_container_healthy_times_out():
     assert result["healthy"] is False
     assert result["timed_out"] is True
     assert result["health"] == "starting"
+
+
+def test_wait_for_container_healthy_sleep_bounded_by_timeout():
+    # A poll_interval far larger than the timeout must NOT push the total wait past the timeout:
+    # the sleep is clamped to the remaining time, so this returns in ~timeout, not ~poll_interval.
+    container = _health_container({"State": {"Status": "running", "Health": {"Status": "starting"}}})
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        started = time.monotonic()
+        result = wait_for_container_healthy("web", timeout=0.05, poll_interval=100)
+        elapsed = time.monotonic() - started
+    assert result["timed_out"] is True
+    assert elapsed < 2.0, f"sleep overshot the timeout ({elapsed:.2f}s); should be bounded near 0.05s"
+
+
+def test_wait_for_container_healthy_rejects_nonpositive_poll_interval():
+    with pytest.raises(ValueError, match="poll_interval"):
+        wait_for_container_healthy("web", poll_interval=0)

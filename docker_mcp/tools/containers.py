@@ -641,11 +641,15 @@ def wait_for_container_healthy(
     args:
         id_or_name: str - The container id or name
         timeout: float - Maximum seconds to wait before returning timed_out (default 120)
-        poll_interval: float - Seconds between health re-inspections (default 2)
+        poll_interval: float - Seconds between health re-inspections (default 2; must be > 0). The
+                              wait between polls is also capped by the time left, so a large
+                              poll_interval can't push the total wait past `timeout`.
     returns: dict - {"container": str, "healthy": bool, "health": str|None, "status": str|None,
                      "waited_seconds": float, "timed_out": bool}; `health` is one of
                      "starting"/"healthy"/"unhealthy" or null when no healthcheck is defined.
     """
+    if poll_interval <= 0:
+        raise ValueError(f"poll_interval must be > 0, got {poll_interval}.")
     container = _get_client().containers.get(id_or_name)
     start = time.monotonic()
     deadline = start + timeout
@@ -666,9 +670,11 @@ def wait_for_container_healthy(
             # No HEALTHCHECK defined: there's nothing to converge to, so don't poll to the timeout.
             return _health_result(id_or_name, healthy=False, health=health, status=status, start=start)
         # Otherwise still settling (health "starting", or status created/restarting/paused): keep polling.
-        if time.monotonic() >= deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             return _health_result(id_or_name, healthy=False, health=health, status=status, start=start, timed_out=True)
-        time.sleep(poll_interval)
+        # Bound the sleep by the time left so a large poll_interval can't block past `timeout`.
+        time.sleep(min(poll_interval, remaining))
 
 
 @tool()

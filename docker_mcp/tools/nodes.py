@@ -43,7 +43,7 @@ def update_node(id_or_name: str, node_spec: dict) -> bool:
 
 
 @tool()
-def remove_node(id_or_name: str, force: bool = False) -> bool:
+def remove_node(node_id: str, force: bool = False) -> bool:
     """
     Remove a node from the swarm.
 
@@ -52,14 +52,14 @@ def remove_node(id_or_name: str, force: bool = False) -> bool:
     first so its tasks reschedule cleanly.
 
     The high-level SDK has no Node.remove(), so this uses the low-level APIClient. `APIClient.remove_node`
-    only accepts a node *ID* (the Engine API is `DELETE /nodes/{id}`), so a name is resolved to its ID
-    first via `nodes.get` — keeping this consistent with `get_node` / `update_node`, which also take id-or-name.
+    only accepts a node *ID* (the Engine API is `DELETE /nodes/{id}`), so a name passed here is resolved
+    to its ID first via `nodes.get` — like `get_node` / `update_node`, the argument accepts an id or a name.
 
     args:
-        id_or_name: str - The node id or name to remove
+        node_id: str - The node id or name to remove
         force: bool - Force removal of an active/reachable node
     returns: bool - True after the node is removed
     """
     client = _get_client()
-    node_id = client.nodes.get(id_or_name).id
-    return client.api.remove_node(node_id, force=force)
+    resolved_id = client.nodes.get(node_id).id
+    return client.api.remove_node(resolved_id, force=force)

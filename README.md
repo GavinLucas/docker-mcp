@@ -200,6 +200,29 @@ Connecting this server to an AI agent grants it the same level of access as a lo
 - **Docker Context retargeting.** `context_use` only changes the CLI default for subsequent CLI-backed tools. SDK-backed tools (`list_containers`, `pull_image`, etc.) keep using whatever daemon the docker-py client connected to when it was first created (lazily, on the first SDK-backed tool call). Restart the server with a different `DOCKER_HOST` / `DOCKER_CONTEXT`, or call `reconnect` (see below), to retarget those. `context_create(skip_tls_verify=True)` disables TLS verification for a context; use only against trusted local daemons.
 - **`reconnect` retargets the trust boundary at runtime.** `reconnect(docker_host=...)` rebuilds the shared SDK client and points it at a different daemon without a server restart — which moves the root-equivalent trust boundary to whatever endpoint is passed. Only allow it against daemons the agent is authorized to control. The `docker_host` argument is logged like any tool call, and an `ssh://` target authenticates via the server host's SSH agent / `known_hosts`. The new endpoint is validated before the previous client is replaced, so a bad target leaves the working client in place.
 
+## Changelog
+
+The tool surface has been built out across two completed roadmaps. PR numbers link to the change.
+
+### Feature & coverage roadmap (2026-06-11)
+
+- **Tool-surface control** — `DOCKER_MCP_DISABLE=<domains>` to drop whole feature areas at registration, plus the `docker-mcp://tool-catalog` resource exposing every tool's domain, mutation category, and registration status (#28).
+- **Swarm workflow completion** — `get_swarm_join_tokens` / `rotate_swarm_join_token` (closing the init → join loop), `remove_node`, `rollback_service`, and the `audit_swarm_health` prompt (#29, #30).
+- **Registry tools** — `registry_get_config` (read an image's env/entrypoint/labels without pulling), `hub_rate_limit` (remaining Docker Hub pull budget), and `logout` (#31).
+- **Knowledge & prompts** — Dockerfile, build-best-practices, engine-security, and engine-api doc resources, plus the `review_dockerfile`, `audit_container_security`, `debug_container_networking`, `investigate_disk_usage`, and `backup_volume` / `restore_volume` prompts (#32).
+- **Docker stacks** — `stack_deploy` / `stack_ls` / `stack_ps` / `stack_services` / `stack_rm` (Compose-on-Swarm) and the `deploy_swarm_stack` prompt (#33).
+- **Compose coverage** — `compose_cp`, `compose_images`, `compose_port`, `compose_wait`, `compose_top`, `compose_kill`, and `compose_pause` / `compose_unpause` (#34).
+- **Container & build quality-of-life** — `wait_for_container_healthy` (poll until a healthcheck passes) and `buildx_history_ls` / `buildx_history_inspect` for drilling into past build records (#35).
+
+### Hardening roadmap (2026-06-10)
+
+- **Restricted modes & annotations** — the `DOCKER_MCP_READONLY` / `DOCKER_MCP_NO_DESTRUCTIVE` env switches and MCP `ToolAnnotations`, both driven by a single central tool classification (#22).
+- **Host-filesystem payloads** — file-path variants that stream image / container-archive tarballs to and from a host path, with the in-band byte cap lowered to 32 MiB (#23); `compose_stop` / `compose_start`, environment-based registry credentials, and a typed `RestartPolicy` (#24).
+- **Bounded blocking & a safer client** — wall-clock bounds on the log, event, and wait tools (#20); a thread-safe client singleton with a short-TTL plugin cache and the `reconnect` tool (#21).
+- **Network & shell-out defenses** — registry bearer-realm validation with an SSRF guard and a bounded docs fetch (#19); consolidation of the CLI shell-out helpers into `_cli.py` with flag-injection rejection on positional arguments (#18).
+
+Earlier milestones include the move from a flat module layout to the `docker_mcp` package (v1.0.0, #15).
+
 ## Contributing
 
 Contributions are welcome. The project values a tight mapping between the Docker SDK's public surface and the MCP tools we expose.

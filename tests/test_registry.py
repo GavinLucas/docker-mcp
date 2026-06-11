@@ -642,7 +642,7 @@ def test_select_platform_digest_matches_and_skips_attestation():
             {"digest": "sha256:amd", "platform": {"os": "linux", "architecture": "amd64"}},
         ]
     }
-    assert _select_platform_digest(index, "linux/amd64") == "sha256:amd"
+    assert _select_platform_digest(index, "linux/amd64") == ("sha256:amd", "linux/amd64")
 
 
 def test_select_platform_digest_honors_variant():
@@ -652,7 +652,16 @@ def test_select_platform_digest_honors_variant():
             {"digest": "sha256:v7", "platform": {"os": "linux", "architecture": "arm", "variant": "v7"}},
         ]
     }
-    assert _select_platform_digest(index, "linux/arm/v7") == "sha256:v7"
+    assert _select_platform_digest(index, "linux/arm/v7") == ("sha256:v7", "linux/arm/v7")
+
+
+def test_select_platform_digest_omitted_variant_reports_actual_selected_variant():
+    # "linux/arm64" (no variant) matches the arm64/v8 entry, and the returned platform reflects the
+    # variant actually selected so the caller is never misled about which one they got.
+    index = {
+        "manifests": [{"digest": "sha256:v8", "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"}}]
+    }
+    assert _select_platform_digest(index, "linux/arm64") == ("sha256:v8", "linux/arm64/v8")
 
 
 def test_select_platform_digest_no_match_lists_available():
@@ -723,6 +732,32 @@ def test_registry_get_config_selects_platform_from_index():
     assert result["platform"] == "linux/arm64"
     assert result["config_digest"] == "sha256:armcfg"
     assert result["config"]["architecture"] == "arm64"
+
+
+def test_registry_get_config_reports_actual_variant_not_caller_input():
+    # Caller asks for "linux/arm64" (no variant); the index only has arm64/v8. The reported platform
+    # must reflect the entry actually selected (".../v8"), not the bare string the caller passed.
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v2/library/alpine/manifests/latest":
+            return httpx.Response(
+                200,
+                json={
+                    "mediaType": "application/vnd.oci.image.index.v1+json",
+                    "manifests": [
+                        {"digest": "sha256:v8", "platform": {"os": "linux", "architecture": "arm64", "variant": "v8"}},
+                    ],
+                },
+            )
+        if path == "/v2/library/alpine/manifests/sha256:v8":
+            return httpx.Response(200, json={"config": {"digest": "sha256:cfg"}, "layers": []})
+        if path == "/v2/library/alpine/blobs/sha256:cfg":
+            return httpx.Response(200, json={"architecture": "arm64", "variant": "v8", "os": "linux"})
+        return httpx.Response(404)
+
+    with _mock_client(handler):
+        result = registry_get_config("alpine", platform="linux/arm64")
+    assert result["platform"] == "linux/arm64/v8"
 
 
 def test_registry_get_config_raises_when_no_config_descriptor():

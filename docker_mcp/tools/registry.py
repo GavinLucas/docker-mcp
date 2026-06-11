@@ -475,8 +475,7 @@ def registry_get_config(
     selected_platform: str | None = None
     # A manifest list / OCI image index has "manifests"; a single-platform manifest has "config".
     if "manifests" in manifest:
-        digest = _select_platform_digest(manifest, platform)
-        selected_platform = platform
+        digest, selected_platform = _select_platform_digest(manifest, platform)
         manifest = _fetch_manifest(digest)
 
     config = manifest.get("config")
@@ -514,12 +513,19 @@ def _parse_platform(platform: str) -> tuple[str, str, str | None]:
     raise ValueError(f"platform must be 'os/arch' or 'os/arch/variant', got {platform!r}")
 
 
-def _select_platform_digest(index: dict, platform: str) -> str:
+def _select_platform_digest(index: dict, platform: str) -> tuple[str, str]:
     """
-    Pick the sub-manifest digest matching `platform` from a manifest list / OCI image index.
+    Pick the sub-manifest matching `platform` from a manifest list / OCI image index.
 
-    Skips attestation manifests (which carry no real os/arch). Raises ValueError if no entry
-    matches, listing what the index does offer so the caller can retry with a valid platform.
+    `platform` is "os/arch[/variant]". An omitted variant matches any variant of that os/arch — so
+    "linux/arm64" still selects a "linux/arm64/v8" entry, following Docker's default-variant
+    convention rather than forcing callers to know the variant. The returned platform string always
+    reflects the entry *actually* selected (including its variant), so the caller is never misled
+    about which variant they got; the first matching entry wins when several share an os/arch. Skips
+    attestation manifests (no real os/arch). Raises ValueError if nothing matches, listing what the
+    index does offer so the caller can retry.
+
+    returns: (digest, actual_platform) of the selected sub-manifest
     """
     want_os, want_arch, want_variant = _parse_platform(platform)
     available: list[str] = []
@@ -529,11 +535,12 @@ def _select_platform_digest(index: dict, platform: str) -> str:
         if os_ in (None, "unknown") or arch in (None, "unknown"):
             continue  # attestation / non-image manifest
         variant = plat.get("variant")
-        available.append("/".join(p for p in (os_, arch, variant) if p))
+        actual = "/".join(p for p in (os_, arch, variant) if p)
+        available.append(actual)
         if os_ == want_os and arch == want_arch and (want_variant is None or variant == want_variant):
             digest = entry.get("digest")
             if digest:
-                return digest
+                return digest, actual
     raise ValueError(
         f"No manifest for platform {platform!r} in image index. Available platforms: "
         f"{', '.join(sorted(set(available))) or 'none'}."

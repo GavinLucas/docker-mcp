@@ -4,11 +4,13 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from docker_mcp.server import TOOL_CATEGORIES
 from docker_mcp.tools.resources import (
     DOCKER_DOCS_BASE_URL,
     EXTERNAL_SECTIONS,
     SDK_SECTIONS,
     get_docs_section,
+    get_tool_catalog,
     list_docs_sections,
 )
 
@@ -71,3 +73,10 @@ def test_get_docs_section_raises_for_status():
 def test_get_docs_section_rejects_unknown_section():
     with pytest.raises(ValueError, match="Unknown documentation section"):
         get_docs_section("not-a-section")
+
+
+def test_get_tool_catalog_returns_json_covering_every_tool():
+    payload = json.loads(get_tool_catalog())
+    assert {t["name"] for t in payload["tools"]} == set(TOOL_CATEGORIES)
+    assert "DOCKER_MCP_DISABLE" in payload["switches"]
+    assert payload["domains"]  # per-domain summary is populated

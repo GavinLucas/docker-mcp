@@ -6,10 +6,15 @@ from docker_mcp.server import (
     TOOL_CATEGORIES,
     ToolCategory,
     _annotations_for,
+    _domain_enabled,
+    _domain_for,
     _is_truthy,
+    _parse_domains,
     _seen_tool_names,
     _should_register,
+    _tool_registry,
     mcp,
+    tool_catalog,
 )
 
 
@@ -101,6 +106,61 @@ def test_is_truthy():
         assert _is_truthy(v) is False
 
 
+# ---------- domain switch (DOCKER_MCP_DISABLE) ----------
+
+
+def test_parse_domains_splits_normalizes_and_drops_blanks():
+    assert _parse_domains("swarm, Plugins ,, SCOUT") == frozenset({"swarm", "plugins", "scout"})
+    assert _parse_domains(None) == frozenset()
+    assert _parse_domains("") == frozenset()
+
+
+def test_domain_for_derives_module_leaf():
+    assert _domain_for(test_domain_for_derives_module_leaf) == "test_server"
+
+
+def test_domain_enabled_respects_disabled_set():
+    assert _domain_enabled("compose", frozenset()) is True
+    assert _domain_enabled("swarm", frozenset({"swarm", "plugins"})) is False
+    assert _domain_enabled("compose", frozenset({"swarm"})) is True
+
+
+def test_every_registered_tool_has_a_domain():
+    # The registry records a domain for every tool, derived from its defining module.
+    assert set(_tool_registry) == set(TOOL_CATEGORIES)
+    assert all(rec.domain for rec in _tool_registry.values())
+    # Sanity-check a couple of known module -> domain mappings.
+    assert _tool_registry["list_containers"].domain == "containers"
+    assert _tool_registry["compose_up"].domain == "compose"
+
+
+# ---------- tool catalog ----------
+
+
+def test_tool_catalog_lists_every_tool_with_taxonomy():
+    catalog = tool_catalog()
+    names = {t["name"] for t in catalog["tools"]}
+    assert names == set(TOOL_CATEGORIES)
+    for entry in catalog["tools"]:
+        assert entry["category"] == TOOL_CATEGORIES[entry["name"]].value
+        assert entry["domain"]
+        # No switches set in the test environment, so every tool registered.
+        assert entry["registered"] is True
+
+
+def test_tool_catalog_reports_switch_state_and_domain_counts():
+    catalog = tool_catalog()
+    assert set(catalog["switches"]) == {
+        "DOCKER_MCP_READONLY",
+        "DOCKER_MCP_NO_DESTRUCTIVE",
+        "DOCKER_MCP_DISABLE",
+    }
+    # Per-domain counts sum to the full tool surface, and by default registered == total.
+    assert sum(d["total"] for d in catalog["domains"]) == len(TOOL_CATEGORIES)
+    assert all(d["registered"] == d["total"] for d in catalog["domains"])
+    assert catalog["unknown_disabled_domains"] == []
+
+
 # ---------- end-to-end registration under the env switches (separate processes) ----------
 
 
@@ -121,9 +181,10 @@ def _env_with(assignments: list[str]) -> dict:
     import os
 
     env = dict(os.environ)
-    # Clear both switches first so the parent environment can't leak into the child.
+    # Clear every switch first so the parent environment can't leak into the child.
     env.pop("DOCKER_MCP_READONLY", None)
     env.pop("DOCKER_MCP_NO_DESTRUCTIVE", None)
+    env.pop("DOCKER_MCP_DISABLE", None)
     for assignment in assignments:
         key, _, value = assignment.partition("=")
         env[key] = value
@@ -157,6 +218,36 @@ def test_both_switches_set_readonly_wins_end_to_end():
 def test_truthy_spelling_accepted_end_to_end():
     # The switches accept "true"/"yes"/"on" spellings, not just "1".
     assert _registered_names(["DOCKER_MCP_READONLY=true"]) == _names_by_category(ToolCategory.READ_ONLY)
+
+
+def _names_by_domain(*domains: str) -> set[str]:
+    wanted = set(domains)
+    return {rec.name for rec in _tool_registry.values() if rec.domain in wanted}
+
+
+def test_disable_env_drops_whole_domains_end_to_end():
+    # Disabling swarm + plugins removes exactly those domains' tools and nothing else.
+    dropped = _names_by_domain("swarm", "plugins")
+    assert dropped, "fixture sanity: expected swarm/plugins tools to exist"
+    names = _registered_names(["DOCKER_MCP_DISABLE=swarm,plugins"])
+    assert names == set(TOOL_CATEGORIES) - dropped
+
+
+def test_disable_env_normalizes_whitespace_and_case_end_to_end():
+    names = _registered_names(["DOCKER_MCP_DISABLE= Compose , SCOUT "])
+    assert names == set(TOOL_CATEGORIES) - _names_by_domain("compose", "scout")
+
+
+def test_disable_env_combines_with_readonly_end_to_end():
+    # The domain switch and the category switch stack: read-only AND not in a disabled domain.
+    names = _registered_names(["DOCKER_MCP_READONLY=1", "DOCKER_MCP_DISABLE=registry"])
+    expected = _names_by_category(ToolCategory.READ_ONLY) - _names_by_domain("registry")
+    assert names == expected
+
+
+def test_unknown_disabled_domain_is_a_no_op_end_to_end():
+    # A typo'd domain disables nothing (and is surfaced via the catalog's unknown_disabled_domains).
+    assert _registered_names(["DOCKER_MCP_DISABLE=swrm"]) == set(TOOL_CATEGORIES)
 
 
 # ---------- typed parameter schemas ----------

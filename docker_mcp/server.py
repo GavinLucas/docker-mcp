@@ -7,6 +7,7 @@
 
 import os
 from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -201,18 +202,87 @@ def _is_truthy(value: str | None) -> bool:
 READONLY = _is_truthy(os.environ.get("DOCKER_MCP_READONLY"))
 NO_DESTRUCTIVE = _is_truthy(os.environ.get("DOCKER_MCP_NO_DESTRUCTIVE"))
 
-# Every tool name a `@tool()` decorator has processed this run, whether or not it was registered
-# (the restrictive modes skip registration). Lets the drift test compare against TOOL_CATEGORIES.
+
+def _parse_domains(value: str | None) -> frozenset[str]:
+    """Parse the comma-separated DOCKER_MCP_DISABLE list into a normalized set of domain names."""
+    return frozenset(part.strip().lower() for part in (value or "").split(",") if part.strip())
+
+
+# Domain switch, orthogonal to the category switches above:
+#   DOCKER_MCP_DISABLE=swarm,plugins — skip every tool whose domain is listed, regardless of category.
+# A tool's domain is its defining module under docker_mcp.tools (e.g. containers, compose, scout), so a
+# user who never touches swarm can drop the whole swarm/services/nodes/configs/secrets surface from the
+# tool list the client has to reason about. This filters *registration*, not classification — disabled
+# tools still appear in the tool-catalog resource so the choice is auditable.
+DISABLED_DOMAINS = _parse_domains(os.environ.get("DOCKER_MCP_DISABLE"))
+
+
+@dataclass(frozen=True)
+class ToolRecord:
+    """What the `@tool()` decorator saw for one tool: its taxonomy and whether it actually registered."""
+
+    name: str
+    domain: str
+    category: ToolCategory
+    registered: bool
+
+
+# Every tool the `@tool()` decorator has processed this run, whether or not it was registered (the
+# restrictive modes and domain switch skip registration). `_seen_tool_names` keeps the drift test's
+# simple set comparison; `_tool_registry` carries the richer per-tool record the catalog resource renders.
 _seen_tool_names: set[str] = set()
+_tool_registry: dict[str, ToolRecord] = {}
+
+
+def _domain_for(func: Callable) -> str:
+    """Derive a tool's domain from its defining module: docker_mcp.tools.containers -> 'containers'."""
+    return (func.__module__ or "").rsplit(".", 1)[-1]
 
 
 def _should_register(category: ToolCategory, *, readonly: bool, no_destructive: bool) -> bool:
-    """Decide whether a tool of `category` is registered under the given switch state."""
+    """Decide whether a tool of `category` is registered under the given category-switch state."""
     if readonly:
         return category is ToolCategory.READ_ONLY
     if no_destructive:
         return category is not ToolCategory.DESTRUCTIVE
     return True
+
+
+def _domain_enabled(domain: str, disabled: frozenset[str]) -> bool:
+    """Decide whether a tool's domain survives the DOCKER_MCP_DISABLE switch."""
+    return domain not in disabled
+
+
+def tool_catalog() -> dict[str, Any]:
+    """
+    Snapshot of the tool surface: which tools exist, their domain/category, and what the active env
+    switches registered. Drives the `docker-mcp://tool-catalog` resource so a client can see the blast
+    radius of each tool — and which whole domains a server has disabled — before calling anything.
+    """
+    records = sorted(_tool_registry.values(), key=lambda r: (r.domain, r.name))
+    domains = sorted({r.domain for r in records})
+    domain_summary = [
+        {
+            "domain": d,
+            "total": sum(1 for r in records if r.domain == d),
+            "registered": sum(1 for r in records if r.domain == d and r.registered),
+        }
+        for d in domains
+    ]
+    return {
+        "switches": {
+            "DOCKER_MCP_READONLY": READONLY,
+            "DOCKER_MCP_NO_DESTRUCTIVE": NO_DESTRUCTIVE,
+            "DOCKER_MCP_DISABLE": sorted(DISABLED_DOMAINS),
+        },
+        # Disabled domains that match no known tool — usually a typo in DOCKER_MCP_DISABLE.
+        "unknown_disabled_domains": sorted(DISABLED_DOMAINS - set(domains)),
+        "domains": domain_summary,
+        "tools": [
+            {"name": r.name, "domain": r.domain, "category": r.category.value, "registered": r.registered}
+            for r in records
+        ],
+    }
 
 
 def _annotations_for(name: str, category: ToolCategory) -> ToolAnnotations:
@@ -229,15 +299,21 @@ def tool(**kwargs: Any) -> Callable[[Callable], Callable]:
     Register an @mcp.tool with central classification — the drop-in `@tool()` every tool module uses.
 
     The tool's category comes from TOOL_CATEGORIES (defaulting to MUTATING, the safe assumption, for
-    anything unclassified). Based on it we skip registration entirely when a read-only env switch
-    forbids the category, and otherwise attach the matching ToolAnnotations.
+    anything unclassified) and its domain from the defining module. We skip registration when a
+    read-only env switch forbids the category or DOCKER_MCP_DISABLE drops the domain, and otherwise
+    attach the matching ToolAnnotations.
     """
 
     def decorator(func: Callable) -> Callable:
         name = func.__name__
+        domain = _domain_for(func)
         category = TOOL_CATEGORIES.get(name, ToolCategory.MUTATING)
+        registered = _should_register(category, readonly=READONLY, no_destructive=NO_DESTRUCTIVE) and _domain_enabled(
+            domain, DISABLED_DOMAINS
+        )
         _seen_tool_names.add(name)
-        if not _should_register(category, readonly=READONLY, no_destructive=NO_DESTRUCTIVE):
+        _tool_registry[name] = ToolRecord(name=name, domain=domain, category=category, registered=registered)
+        if not registered:
             return func
         return mcp.tool(annotations=_annotations_for(name, category), **kwargs)(func)
 

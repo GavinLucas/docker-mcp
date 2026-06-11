@@ -4,7 +4,7 @@ import json
 
 import httpx
 
-from docker_mcp.server import mcp
+from docker_mcp.server import mcp, tool_catalog
 
 DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
 
@@ -88,6 +88,22 @@ def list_docs_sections() -> str:
         },
         indent=2,
     )
+
+
+@mcp.resource("docker-mcp://tool-catalog", mime_type="application/json")
+def get_tool_catalog() -> str:
+    """
+    List every tool this server knows about with its domain, mutation category, and whether the
+    active env switches actually registered it.
+
+    Read this to see the blast radius of a tool before calling it (READ_ONLY / MUTATING /
+    DESTRUCTIVE) and to confirm which whole domains the operator disabled via DOCKER_MCP_DISABLE
+    (or the read-only switches) — a tool absent from the live tool list but present here as
+    `registered: false` was filtered out by configuration, not missing by mistake.
+
+    returns: str - JSON with `switches`, per-domain counts, and a per-tool list
+    """
+    return json.dumps(tool_catalog(), indent=2)
 
 
 @mcp.resource("docker-docs://{section}", mime_type="text/html")

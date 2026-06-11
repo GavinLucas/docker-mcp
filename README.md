@@ -61,7 +61,7 @@ Once loaded, the agent gets MCP tools grouped by Docker domain. A few examples:
 
 The SDK-backed surface mirrors the [Docker SDK reference](https://docker-py.readthedocs.io/en/stable/) — if it's documented there, it's available here. The Compose and Context surfaces follow the [Compose CLI](https://docs.docker.com/reference/cli/docker/compose/) and [docker context](https://docs.docker.com/reference/cli/docker/context/) references.
 
-The server also publishes the Docker SDK for Python reference and selected Docker CLI / registry references as MCP resources so the agent can consult them at runtime: read `docker-docs://contents` for the section index, then `docker-docs://<section>` (e.g. `docker-docs://containers`, `docker-docs://compose`, `docker-docs://oci-distribution-spec`) for the rendered page.
+The server also publishes the Docker SDK for Python reference and selected Docker CLI / registry references as MCP resources so the agent can consult them at runtime: read `docker-docs://contents` for the section index, then `docker-docs://<section>` (e.g. `docker-docs://containers`, `docker-docs://compose`, `docker-docs://oci-distribution-spec`) for the rendered page. A further resource, `docker-mcp://tool-catalog`, lists every tool this server knows about with its domain, mutation category, and whether the active configuration registered it — useful for confirming the blast radius of a tool, or why one is absent from the live list.
 
 ### Example prompts
 
@@ -125,12 +125,13 @@ Many AI clients let you invoke registered MCP prompts directly (in Claude Code, 
 
 ## Configuration
 
-Two environment variables restrict which tools are registered when the server starts. Because they drop tools at registration time, a disabled tool never appears in the client's tool list — this is a server-side guarantee, not a client-side prompt. Set either to `1` / `true` / `yes` / `on`:
+Three environment variables restrict which tools are registered when the server starts. Because they drop tools at registration time, a disabled tool never appears in the client's tool list — this is a server-side guarantee, not a client-side prompt. Set the two boolean switches to `1` / `true` / `yes` / `on`:
 
 - **`DOCKER_MCP_READONLY`** — register only read-only tools (queries, log/data reads, scans). Every tool that changes state is omitted. Use this for monitoring or inspection agents that must not be able to modify anything.
 - **`DOCKER_MCP_NO_DESTRUCTIVE`** — register everything *except* destructive tools (`remove_*`, `prune_*`, `kill_container`, `compose_down`, `leave_swarm`, `context_rm`, `buildx_prune`, `buildx_rm`). A "no data loss" mode that still allows creating and starting resources. `DOCKER_MCP_READONLY` is stricter and wins if both are set.
+- **`DOCKER_MCP_DISABLE`** — a comma-separated list of *domains* (feature areas) to drop wholesale, regardless of category: e.g. `DOCKER_MCP_DISABLE=swarm,services,nodes,configs,secrets` removes the entire swarm surface from a single-host server, and `DOCKER_MCP_DISABLE=scout,buildx` trims build/scan tooling an agent will never use. A domain is a tool module's name — `containers`, `images`, `networks`, `volumes`, `compose`, `context`, `buildx`, `scout`, `registry`, `swarm`, `services`, `nodes`, `plugins`, `configs`, `secrets`, `client`. Names are case-insensitive; an unrecognized name is ignored (and surfaced as `unknown_disabled_domains` in the tool catalog, see below). This stacks with the category switches — a tool registers only if its category survives *and* its domain is enabled. Trimming domains an agent doesn't need also cuts the tool-list size the client has to reason about, which matters at this server's ~190-tool scale.
 
-Independently, every registered tool carries [MCP `ToolAnnotations`](https://modelcontextprotocol.io/) — `readOnlyHint` on queries and `destructiveHint` on destructive operations (plus `idempotentHint` on the prune family) — so a client like Claude Code can auto-allow safe reads and gate destructive calls. The classification lives in `TOOL_CATEGORIES` in `docker_mcp/server.py`.
+Independently, every registered tool carries [MCP `ToolAnnotations`](https://modelcontextprotocol.io/) — `readOnlyHint` on queries and `destructiveHint` on destructive operations (plus `idempotentHint` on the prune family) — so a client like Claude Code can auto-allow safe reads and gate destructive calls. The classification lives in `TOOL_CATEGORIES` in `docker_mcp/server.py`. To see the full picture at runtime — every tool with its domain, category, and whether the active switches registered it — read the **`docker-mcp://tool-catalog`** MCP resource.
 
 For private registries, the HTTPS-backed `registry_*` tools fall back to **`DOCKER_MCP_REGISTRY_USERNAME`** / **`DOCKER_MCP_REGISTRY_PASSWORD`** from the server's environment when no explicit `username`/`password` arguments are passed (explicit arguments win; the env pair is only used when both arguments are unset). Setting credentials in the environment keeps them out of tool arguments, which many MCP clients log verbatim — the password may be a personal-access token.
 
@@ -244,7 +245,7 @@ def mcp_example(name: str):
 ```
 
 - Import `tool` from `docker_mcp.server` (and, for prompts/resources, `mcp`), never directly from the `mcp` package — that creates a circular import.
-- Every tool needs a `TOOL_CATEGORIES` entry in `docker_mcp/server.py` (`READ_ONLY` / `MUTATING` / `DESTRUCTIVE`); the central map drives the tool's `ToolAnnotations` and the read-only env switches, and `tests/test_server.py` fails if it drifts from the registered set.
+- Every tool needs a `TOOL_CATEGORIES` entry in `docker_mcp/server.py` (`READ_ONLY` / `MUTATING` / `DESTRUCTIVE`); the central map drives the tool's `ToolAnnotations` and the read-only env switches, and `tests/test_server.py` fails if it drifts from the registered set. A tool's *domain* (for `DOCKER_MCP_DISABLE` and the tool catalog) is derived automatically from its module name, so putting a tool in the right `docker_mcp/tools/<domain>.py` file is all that's needed.
 - Line length is 120 characters (enforced by ruff).
 - CLI shell-outs must go through `docker_mcp/tools/_cli.py:run_docker` — never call `subprocess.run` directly from a tool module. The helper enforces `shell=False`, resolves the binary via `shutil.which` (cross-platform), decodes output as UTF-8 with replace, caps the captured bytes, scrubs the environment, and suppresses console pop-ups on Windows.
 

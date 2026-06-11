@@ -160,6 +160,12 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "compose_run": ToolCategory.MUTATING,
     "compose_exec": ToolCategory.MUTATING,
     "compose_ls": ToolCategory.READ_ONLY,
+    # stack (Compose-on-Swarm, CLI)
+    "stack_deploy": ToolCategory.MUTATING,
+    "stack_ls": ToolCategory.READ_ONLY,
+    "stack_ps": ToolCategory.READ_ONLY,
+    "stack_services": ToolCategory.READ_ONLY,
+    "stack_rm": ToolCategory.DESTRUCTIVE,
     # context
     "context_ls": ToolCategory.READ_ONLY,
     "context_inspect": ToolCategory.READ_ONLY,

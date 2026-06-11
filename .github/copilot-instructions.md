@@ -43,6 +43,7 @@ Each file maps to one Docker SDK domain or one CLI/registry feature area. Unders
 | `services.py` | Swarm services | docker-py |
 | `swarm.py` | Swarm init, join, leave, join tokens | docker-py |
 | `compose.py` | Docker Compose v2 | `docker compose` CLI via `_cli.py` |
+| `stack.py` | Docker stacks (Compose-on-Swarm) | `docker stack` CLI via `_cli.py` |
 | `context.py` | Docker CLI contexts | `docker context` CLI via `_cli.py` |
 | `buildx.py` | Buildx / BuildKit | `docker buildx` CLI via `_cli.py` |
 | `scout.py` | Vulnerability scanning, SBOMs | `docker scout` CLI via `_cli.py` |

@@ -16,5 +16,6 @@ from docker_mcp.tools.resources import *
 from docker_mcp.tools.scout import *
 from docker_mcp.tools.secrets import *
 from docker_mcp.tools.services import *
+from docker_mcp.tools.stack import *
 from docker_mcp.tools.swarm import *
 from docker_mcp.tools.volumes import *

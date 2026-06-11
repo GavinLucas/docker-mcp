@@ -8,6 +8,8 @@ from docker_mcp.tools.buildx import (
     buildx_build,
     buildx_create,
     buildx_du,
+    buildx_history_inspect,
+    buildx_history_ls,
     buildx_imagetools_create,
     buildx_imagetools_inspect,
     buildx_inspect,
@@ -379,3 +381,82 @@ def test_buildx_imagetools_inspect_rejects_flag_like_image():
 def test_buildx_imagetools_create_rejects_flag_like_source():
     with pytest.raises(ValueError, match="parses as a flag"):
         buildx_imagetools_create(target="me/img:latest", sources=["ok/img:amd64", "--bad"])
+
+
+# ---------- buildx_history_ls / buildx_history_inspect ----------
+
+
+def test_buildx_history_ls_parses_ndjson():
+    ndjson = '{"ref":"a1","name":"build-a","status":"Completed"}\n{"ref":"b2","name":"build-b","status":"Error"}'
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok(ndjson)) as run:
+        result = buildx_history_ls()
+    assert [r["ref"] for r in result] == ["a1", "b2"]
+    argv = run.call_args.args[0]
+    assert argv[:3] == ["buildx", "history", "ls"]
+    assert argv[-2:] == ["--format", "{{json .}}"]
+
+
+def test_buildx_history_ls_passes_builder():
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("")) as run:
+        buildx_history_ls(builder="mybuilder")
+    argv = run.call_args.args[0]
+    assert "--builder" in argv and "mybuilder" in argv
+
+
+def test_buildx_history_ls_raises_on_failure():
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_fail('unknown command "history"')):
+        with pytest.raises(RuntimeError, match="buildx history ls"):
+            buildx_history_ls()
+
+
+def test_buildx_history_inspect_parses_json_object():
+    body = '{"Name":"build-a","Ref":"a1","Duration":72500142,"Status":"completed"}'
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok(body)) as run:
+        result = buildx_history_inspect(ref="a1")
+    assert result["Ref"] == "a1"
+    argv = run.call_args.args[0]
+    assert argv[:3] == ["buildx", "history", "inspect"]
+    assert "--format" in argv and "json" in argv
+    assert argv[-1] == "a1"
+
+
+def test_buildx_history_inspect_omits_ref_when_empty():
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("{}")) as run:
+        buildx_history_inspect()
+    argv = run.call_args.args[0]
+    # No trailing ref positional — buildx then inspects the most recent build.
+    assert argv[-1] == "json"
+
+
+def test_buildx_history_inspect_normalizes_qualified_ls_ref():
+    # A `buildx history ls` ref is "<builder>/<node>/<id>", but inspect only accepts the bare id —
+    # the tool reduces it and targets the builder named in the ref.
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("{}")) as run:
+        buildx_history_inspect(ref="default/default/abc123")
+    argv = run.call_args.args[0]
+    assert argv[-1] == "abc123"  # bare id, not the qualified path
+    assert "--builder" in argv and argv[argv.index("--builder") + 1] == "default"
+
+
+def test_buildx_history_inspect_explicit_builder_overrides_ref_builder():
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("{}")) as run:
+        buildx_history_inspect(ref="default/default/abc123", builder="other")
+    argv = run.call_args.args[0]
+    assert argv[argv.index("--builder") + 1] == "other"
+    assert argv[-1] == "abc123"
+
+
+def test_buildx_history_inspect_caret_ref_passes_through():
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("{}")) as run:
+        buildx_history_inspect(ref="^0")
+    argv = run.call_args.args[0]
+    assert argv[-1] == "^0"  # no "/", unchanged
+    assert "--builder" not in argv  # nothing to derive
+
+
+def test_buildx_history_inspect_non_object_wrapped_in_raw():
+    # Valid JSON that isn't an object (e.g. an array) falls back to {"raw": <stdout>}.
+    # (Genuinely unparseable output raises instead, surfacing the parse error.)
+    with patch("docker_mcp.tools.buildx.run_docker", return_value=_ok("[1, 2, 3]")):
+        result = buildx_history_inspect(ref="a1")
+    assert result == {"raw": "[1, 2, 3]"}

@@ -7,6 +7,7 @@
 from docker_mcp.server import tool
 from docker_mcp.tools._cli import (
     CliResult,
+    parse_json_or_ndjson,
     parse_ndjson,
     raise_on_cli_failure,
     require_plugin,
@@ -316,6 +317,67 @@ def buildx_ls() -> list:
     result = _run_buildx(["ls", "--format", "{{json .}}"], timeout=_TIMEOUT_QUERY)
     raise_on_cli_failure(result, "buildx ls")
     return parse_ndjson(result.stdout, truncated=result.truncated, what="buildx ls output")
+
+
+@tool()
+def buildx_history_ls(builder: str | None = None) -> list:
+    """
+    List recent build records (BuildKit build history), parsed from `--format '{{json .}}'`.
+
+    Each record is a past build with its ref, name, status, step counts, and timestamps — useful for
+    finding a build to drill into with `buildx_history_inspect`. Requires buildx >= v0.13 (older
+    versions have no `history` subcommand and this raises with the CLI's "unknown command" error).
+
+    args:
+        builder: str - Builder instance to read history from (defaults to the active builder)
+    returns: list - One dict per build record (ref, name, status, total/completed/cached steps, times)
+    """
+    args = ["history", "ls", "--format", "{{json .}}"]
+    if builder is not None:
+        args.extend(["--builder", safe_positional(builder, "builder name")])
+    result = _run_buildx(args, timeout=_TIMEOUT_QUERY)
+    raise_on_cli_failure(result, "buildx history ls")
+    return parse_ndjson(result.stdout, truncated=result.truncated, what="buildx history ls output")
+
+
+@tool()
+def buildx_history_inspect(ref: str = "", builder: str | None = None) -> dict:
+    """
+    Inspect a single build record by ref, parsed from `--format json`.
+
+    Returns the full record for one build — duration, materials, attestations, error (if any) — for
+    debugging a failed or slow build found via `buildx_history_ls`. Requires buildx >= v0.13.
+
+    args:
+        ref: str - Build record ref. Pass the `ref` field from `buildx_history_ls` directly — it
+                   reports a qualified "<builder>/<node>/<id>", but `history inspect` only accepts the
+                   bare id, so this reduces it to the id and (unless `builder` is given) targets the
+                   builder named in the ref. Empty/omitted inspects the most recent build; the `^N`
+                   syntax (e.g. "^0" = latest) is also valid.
+        builder: str - Builder instance the build ran on (defaults to the one in `ref`, else active)
+    returns: dict - The parsed build record (or {"raw": <stdout>} if the output isn't a JSON object)
+    """
+    # `buildx history ls` emits ref as "<builder>/<node>/<id>", but `history inspect` only finds the
+    # record by its bare id; the qualified form errors with "no record found". Reduce a qualified ref
+    # to its id, and derive the builder from it when the caller didn't pass one. `^N` refs and bare
+    # ids have no "/" and pass through unchanged.
+    effective_builder = builder
+    bare_ref = ref
+    if ref:
+        parts = ref.split("/")
+        if len(parts) >= 3:
+            bare_ref = parts[-1]
+            if effective_builder is None:
+                effective_builder = parts[0]
+    args = ["history", "inspect", "--format", "json"]
+    if effective_builder is not None:
+        args.extend(["--builder", safe_positional(effective_builder, "builder name")])
+    if bare_ref:
+        args.append(safe_positional(bare_ref, "build ref"))
+    result = _run_buildx(args, timeout=_TIMEOUT_QUERY)
+    raise_on_cli_failure(result, "buildx history inspect")
+    parsed = parse_json_or_ndjson(result.stdout, truncated=result.truncated, what="buildx history inspect output")
+    return parsed if isinstance(parsed, dict) else {"raw": result.stdout}
 
 
 @tool()

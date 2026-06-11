@@ -45,7 +45,7 @@ Each file maps to one Docker SDK domain or one CLI/registry feature area. Unders
 | `compose.py` | Docker Compose v2 | `docker compose` CLI via `_cli.py` |
 | `stack.py` | Docker stacks (Compose-on-Swarm) | `docker stack` CLI via `_cli.py` |
 | `context.py` | Docker CLI contexts | `docker context` CLI via `_cli.py` |
-| `buildx.py` | Buildx / BuildKit | `docker buildx` CLI via `_cli.py` |
+| `buildx.py` | Buildx / BuildKit (incl. build history) | `docker buildx` CLI via `_cli.py` |
 | `scout.py` | Vulnerability scanning, SBOMs | `docker scout` CLI via `_cli.py` |
 | `registry.py` | OCI v2 registries + Docker Hub | HTTPS via `httpx` (no daemon) |
 | `prompts.py` | `@mcp.prompt()` workflow templates | — |

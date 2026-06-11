@@ -1,6 +1,7 @@
 # library of mcp tools relating to container management
 
 import threading
+import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal, TypedDict, cast
@@ -602,6 +603,72 @@ def wait_container(
             f"Poll `get_container` for its current state, or call `wait_container` with a larger "
             f"`timeout` (or `timeout=None` to wait indefinitely)."
         ) from exc
+
+
+def _health_result(
+    id_or_name: str, *, healthy: bool, health: str | None, status: str | None, start: float, timed_out: bool = False
+) -> dict:
+    """Build the wait_for_container_healthy result snapshot from the current poll observation."""
+    return {
+        "container": id_or_name,
+        "healthy": healthy,
+        "health": health,
+        "status": status,
+        "waited_seconds": round(time.monotonic() - start, 2),
+        "timed_out": timed_out,
+    }
+
+
+@tool()
+def wait_for_container_healthy(
+    id_or_name: str,
+    timeout: float = 120.0,
+    poll_interval: float = 2.0,
+) -> dict:
+    """
+    Poll a container until its healthcheck reports `healthy` (or it stops, or the timeout elapses).
+
+    Complements `wait_container`, which waits for a container to *exit*: this waits for a running
+    container to become *healthy*. It re-inspects every `poll_interval` seconds and never blocks
+    longer than `timeout` (no exception on timeout — the result carries `timed_out: true`).
+
+    Health comes from the container's HEALTHCHECK. If the image/container defines none there is no
+    health state to wait for, so once the container is `running` the tool returns promptly with
+    `health: null` and `healthy: false` (false meaning "not confirmed healthy", not "unhealthy" —
+    check the `health` field to tell them apart). A container that exits before becoming healthy
+    returns with its terminal `status` and `healthy: false`.
+
+    args:
+        id_or_name: str - The container id or name
+        timeout: float - Maximum seconds to wait before returning timed_out (default 120)
+        poll_interval: float - Seconds between health re-inspections (default 2)
+    returns: dict - {"container": str, "healthy": bool, "health": str|None, "status": str|None,
+                     "waited_seconds": float, "timed_out": bool}; `health` is one of
+                     "starting"/"healthy"/"unhealthy" or null when no healthcheck is defined.
+    """
+    container = _get_client().containers.get(id_or_name)
+    start = time.monotonic()
+    deadline = start + timeout
+    while True:
+        container.reload()
+        state = container.attrs.get("State", {}) or {}
+        status = state.get("Status")  # created / running / exited / dead / paused / restarting
+        health = (state.get("Health") or {}).get("Status")  # starting / healthy / unhealthy, or None
+
+        if health == "healthy":
+            return _health_result(id_or_name, healthy=True, health=health, status=status, start=start)
+        if health == "unhealthy":
+            return _health_result(id_or_name, healthy=False, health=health, status=status, start=start)
+        if status in ("exited", "dead"):
+            # Stopped before ever becoming healthy.
+            return _health_result(id_or_name, healthy=False, health=health, status=status, start=start)
+        if health is None and status == "running":
+            # No HEALTHCHECK defined: there's nothing to converge to, so don't poll to the timeout.
+            return _health_result(id_or_name, healthy=False, health=health, status=status, start=start)
+        # Otherwise still settling (health "starting", or status created/restarting/paused): keep polling.
+        if time.monotonic() >= deadline:
+            return _health_result(id_or_name, healthy=False, health=health, status=status, start=start, timed_out=True)
+        time.sleep(poll_interval)
 
 
 @tool()

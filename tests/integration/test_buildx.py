@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 from docker_mcp.tools._cli import has_plugin
-from docker_mcp.tools.buildx import buildx_build, buildx_du, buildx_imagetools_inspect, buildx_ls
+from docker_mcp.tools.buildx import (
+    buildx_build,
+    buildx_du,
+    buildx_history_inspect,
+    buildx_history_ls,
+    buildx_imagetools_inspect,
+    buildx_ls,
+)
 
 # A minimal Dockerfile that produces a tiny image without pulling anything large.
 # `scratch` is the empty base image and ships with the buildx plugin's defaults.
@@ -60,3 +67,23 @@ def test_buildx_imagetools_inspect_alpine_returns_manifest():
     if result["returncode"] != 0:
         pytest.skip(f"buildx imagetools inspect unreachable (registry/network?): {result['stderr'][:200]}")
     assert result["stdout"].strip().startswith("{")
+
+
+def test_buildx_history_ls_and_inspect_after_build(build_context: Path):
+    # Produce a build record, then list/inspect it. `history` needs buildx >= v0.13.
+    build = buildx_build(
+        context=str(build_context), tags=["docker-mcp-it-history:test"], load=True, timeout_seconds=300.0
+    )
+    assert build["returncode"] == 0, build["stderr"]
+    try:
+        records = buildx_history_ls()
+    except RuntimeError as exc:
+        if "unknown" in str(exc).lower() or "history" in str(exc).lower():
+            pytest.skip(f"buildx history not supported on this buildx version: {exc}")
+        raise
+    assert isinstance(records, list)
+    assert records, "expected at least one build record after a build"
+    assert all("ref" in r for r in records)
+    # Inspect the most recent record by its ref.
+    detail = buildx_history_inspect(ref=records[0]["ref"])
+    assert isinstance(detail, dict)

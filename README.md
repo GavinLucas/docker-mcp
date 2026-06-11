@@ -48,7 +48,7 @@ The server connects through `docker.from_env()`, so anything the standard Docker
 
 Once loaded, the agent gets MCP tools grouped by Docker domain. A few examples:
 
-- **Containers** — `run_container`, `list_containers`, `exec_in_container`, `container_logs`, `stop_container`, `commit_container`, `export_container_to_file` / `get_container_archive_to_file` / `put_container_archive_from_file` (stream tar archives to/from a host path)
+- **Containers** — `run_container`, `list_containers`, `exec_in_container`, `container_logs`, `stop_container`, `commit_container`, `wait_for_container_healthy` (poll until a healthcheck passes), `export_container_to_file` / `get_container_archive_to_file` / `put_container_archive_from_file` (stream tar archives to/from a host path)
 - **Images** — `build_image`, `pull_image`, `push_image`, `tag_image`, `prune_images`, `save_image_to_file` / `load_image_from_file` (stream image tarballs to/from a host path)
 - **Networks / Volumes** — `create_network`, `connect_network`, `create_volume`, `prune_volumes`
 - **Swarm** — `init_swarm`, `get_swarm_join_tokens` (close the init → join loop), `rotate_swarm_join_token`, `create_service`, `scale_service`, `rollback_service` (re-apply the previous service spec), `list_nodes`, `remove_node`, `create_secret`, `create_config`
@@ -57,7 +57,7 @@ Once loaded, the agent gets MCP tools grouped by Docker domain. A few examples:
 - **Stacks** — `stack_deploy`, `stack_ls`, `stack_ps`, `stack_services`, `stack_rm` *(deploy a Compose file to a swarm as a stack; wraps the `docker stack` CLI — requires a swarm manager)*
 - **Contexts** — `context_ls`, `context_inspect`, `context_create`, `context_use`, `context_rm` *(wraps the `docker context` CLI)*
 - **Registry / Hub** — `registry_list_tags`, `registry_inspect_manifest`, `registry_get_config` (read an image's env/entrypoint/labels without pulling), `hub_list_tags`, `hub_repo_info`, `hub_rate_limit` (remaining pull budget) *(HTTPS to OCI v2 registries and the Docker Hub API — no daemon required; transparent retry on a brief 429)*
-- **Buildx** — `buildx_build`, `buildx_bake`, `buildx_imagetools_inspect`, `buildx_imagetools_create`, `buildx_ls`, `buildx_inspect`, `buildx_du`, `buildx_prune`, `buildx_create`, `buildx_use`, `buildx_rm` *(wraps the `docker buildx` CLI plugin). Use `buildx_imagetools_*` in place of `docker manifest` — that command is in maintenance mode and lacks support for OCI image indexes and attestations.*
+- **Buildx** — `buildx_build`, `buildx_bake`, `buildx_imagetools_inspect`, `buildx_imagetools_create`, `buildx_ls`, `buildx_inspect`, `buildx_du`, `buildx_history_ls` / `buildx_history_inspect` (drill into past build records), `buildx_prune`, `buildx_create`, `buildx_use`, `buildx_rm` *(wraps the `docker buildx` CLI plugin). Use `buildx_imagetools_*` in place of `docker manifest` — that command is in maintenance mode and lacks support for OCI image indexes and attestations.*
 - **Scout** — `scout_cves`, `scout_quickview`, `scout_recommendations`, `scout_compare`, `scout_sbom` *(wraps the `docker scout` CLI plugin; most features benefit from `docker login` on the host running this server).*
 
 The SDK-backed surface mirrors the [Docker SDK reference](https://docker-py.readthedocs.io/en/stable/) — if it's documented there, it's available here. The Compose and Context surfaces follow the [Compose CLI](https://docs.docker.com/reference/cli/docker/compose/) and [docker context](https://docs.docker.com/reference/cli/docker/context/) references.

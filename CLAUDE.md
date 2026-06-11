@@ -73,7 +73,7 @@ Each file maps to one Docker SDK domain (or, for CLI-only and registry-only feat
 | `docker_mcp/tools/compose.py` | Docker Compose v2 | `docker compose` CLI via `_cli.py` |
 | `docker_mcp/tools/stack.py` | Docker stacks (Compose-on-Swarm) | `docker stack` CLI via `_cli.py` (core CLI, no plugin probe) |
 | `docker_mcp/tools/context.py` | Docker CLI contexts | `docker context` CLI via `_cli.py` |
-| `docker_mcp/tools/buildx.py` | Buildx / BuildKit (multi-arch builds, imagetools — supersedes `docker manifest`) | `docker buildx` CLI via `_cli.py` |
+| `docker_mcp/tools/buildx.py` | Buildx / BuildKit (multi-arch builds, imagetools — supersedes `docker manifest` — and build history) | `docker buildx` CLI via `_cli.py` |
 | `docker_mcp/tools/scout.py` | Vulnerability scanning, SBOMs, base-image recommendations | `docker scout` CLI via `_cli.py` |
 | `docker_mcp/tools/registry.py` | OCI v2 registries + Docker Hub (with 429 retry policy) | HTTPS via `httpx` (no daemon) |
 | `docker_mcp/tools/prompts.py` | `@mcp.prompt()` workflow templates | — |

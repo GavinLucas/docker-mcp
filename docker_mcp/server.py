@@ -64,6 +64,7 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "resize_container": ToolCategory.MUTATING,
     "update_container": ToolCategory.MUTATING,
     "wait_container": ToolCategory.READ_ONLY,
+    "wait_for_container_healthy": ToolCategory.READ_ONLY,
     "export_container": ToolCategory.READ_ONLY,
     "export_container_to_file": ToolCategory.MUTATING,  # writes a file on the server host
     "get_container_archive": ToolCategory.READ_ONLY,
@@ -186,6 +187,8 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "buildx_imagetools_inspect": ToolCategory.READ_ONLY,
     "buildx_imagetools_create": ToolCategory.MUTATING,
     "buildx_ls": ToolCategory.READ_ONLY,
+    "buildx_history_ls": ToolCategory.READ_ONLY,
+    "buildx_history_inspect": ToolCategory.READ_ONLY,
     "buildx_inspect": ToolCategory.READ_ONLY,
     "buildx_du": ToolCategory.READ_ONLY,
     "buildx_prune": ToolCategory.DESTRUCTIVE,

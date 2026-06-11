@@ -35,6 +35,7 @@ from docker_mcp.tools.containers import (
     unpause_container,
     update_container,
     wait_container,
+    wait_for_container_healthy,
 )
 
 
@@ -424,3 +425,84 @@ def test_follow_container_logs_returns_collected_when_stream_close_raises():
         mock_client.return_value.containers.get.return_value = container
         result = follow_container_logs("web", limit_lines=200)
     assert result == "line1\nline2"
+
+
+# ---------- wait_for_container_healthy ----------
+
+
+def _health_container(*states: dict) -> MagicMock:
+    """A mock container whose attrs advance through `states` on each reload() call."""
+    container = MagicMock()
+    container.attrs = states[0]
+    seq = {"i": 0}
+
+    def _reload():
+        container.attrs = states[min(seq["i"], len(states) - 1)]
+        seq["i"] += 1
+
+    container.reload.side_effect = _reload
+    return container
+
+
+def test_wait_for_container_healthy_returns_when_healthy():
+    container = _health_container({"State": {"Status": "running", "Health": {"Status": "healthy"}}})
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("web", timeout=5)
+    assert result["healthy"] is True
+    assert result["health"] == "healthy"
+    assert result["timed_out"] is False
+    container.reload.assert_called()
+
+
+def test_wait_for_container_healthy_polls_through_starting():
+    container = _health_container(
+        {"State": {"Status": "running", "Health": {"Status": "starting"}}},
+        {"State": {"Status": "running", "Health": {"Status": "healthy"}}},
+    )
+    with _patch() as mock_client, patch("docker_mcp.tools.containers.time.sleep") as sleep:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("web", timeout=10, poll_interval=0.01)
+    assert result["healthy"] is True
+    assert container.reload.call_count == 2  # starting, then healthy
+    sleep.assert_called_once()  # slept once between the two polls
+
+
+def test_wait_for_container_healthy_reports_unhealthy():
+    container = _health_container({"State": {"Status": "running", "Health": {"Status": "unhealthy"}}})
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("web", timeout=5)
+    assert result["healthy"] is False
+    assert result["health"] == "unhealthy"
+
+
+def test_wait_for_container_healthy_stops_if_container_exits():
+    container = _health_container({"State": {"Status": "exited", "Health": {"Status": "starting"}}})
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("batch", timeout=5)
+    assert result["healthy"] is False
+    assert result["status"] == "exited"
+
+
+def test_wait_for_container_healthy_no_healthcheck_returns_promptly():
+    # Running container with no Health key (no HEALTHCHECK): return at once, health=None.
+    container = _health_container({"State": {"Status": "running"}})
+    with _patch() as mock_client, patch("docker_mcp.tools.containers.time.sleep") as sleep:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("web", timeout=5)
+    assert result["healthy"] is False
+    assert result["health"] is None
+    assert result["status"] == "running"
+    sleep.assert_not_called()  # did not poll-wait
+
+
+def test_wait_for_container_healthy_times_out():
+    container = _health_container({"State": {"Status": "running", "Health": {"Status": "starting"}}})
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = wait_for_container_healthy("web", timeout=0.0)  # deadline already passed
+    assert result["healthy"] is False
+    assert result["timed_out"] is True
+    assert result["health"] == "starting"

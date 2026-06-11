@@ -566,7 +566,9 @@ def compose_port(
         files: list[str] - Explicit compose file paths
         project_name: str - Compose project name override
     returns: dict - {"service", "private_port", "protocol", "published": "host:port"|None,
-                     "host": str|None, "port": int|None}
+                     "host": str|None, "port": int|None, "bindings": list[str]}.
+                     `published`/`host`/`port` describe the first binding; `bindings` lists every
+                     line (a port can be published on more than one address, e.g. IPv4 and IPv6).
     """
     args = [*_global_args(files, project_name, None), "port", "--protocol", protocol]
     if index != 1:
@@ -575,15 +577,20 @@ def compose_port(
     args.append(str(private_port))
     result = _run_compose(args, cwd=project_dir, timeout=_TIMEOUT_QUERY)
     raise_on_cli_failure(result, "compose port")
-    published = result.stdout.strip()
-    host, sep, port = published.rpartition(":")
+    # `compose port` may print several bindings, one per line (e.g. an IPv4 and an IPv6 address).
+    # Parse the first non-empty line deterministically — splitting on the *last* colon keeps the
+    # port intact even for a bracketed IPv6 host like "[::]:8080" — and surface the rest in `bindings`.
+    bindings = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    first = bindings[0] if bindings else ""
+    host, sep, port = first.rpartition(":")
     return {
         "service": service,
         "private_port": private_port,
         "protocol": protocol,
-        "published": published or None,
+        "published": first or None,
         "host": host if (sep and host) else None,
         "port": int(port) if (sep and port.isdigit()) else None,
+        "bindings": bindings,
     }
 
 

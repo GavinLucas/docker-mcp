@@ -430,6 +430,20 @@ def test_compose_port_unpublished_is_none():
         result = compose_port("web", 80)
     assert result["published"] is None
     assert result["host"] is None and result["port"] is None
+    assert result["bindings"] == []
+
+
+def test_compose_port_multiline_parses_first_binding_and_lists_all():
+    # A port can be published on several addresses (IPv4 + IPv6); each is its own line.
+    out = "0.0.0.0:8080\n[::]:8080\n"
+    with patch("docker_mcp.tools.compose.run_docker", return_value=_ok(out)):
+        result = compose_port("web", 80)
+    # First binding drives the scalar fields; no newline/second-line leakage into host.
+    assert result["published"] == "0.0.0.0:8080"
+    assert result["host"] == "0.0.0.0"  # noqa: S104 — asserting parsed CLI output, not binding a socket
+    assert result["port"] == 8080
+    # All bindings are preserved, and the IPv6 line splits on the last colon (port stays intact).
+    assert result["bindings"] == ["0.0.0.0:8080", "[::]:8080"]
 
 
 def test_compose_port_raises_on_failure():

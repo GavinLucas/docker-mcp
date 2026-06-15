@@ -59,4 +59,5 @@ def remove_node(node_id: str, force: bool = False) -> bool:
         force: bool - Force removal of an active/reachable node
     returns: bool - True after the node is removed
     """
-    return _get_client().nodes.get(node_id).remove(force=force)
+    _get_client().nodes.get(node_id).remove(force=force)
+    return True

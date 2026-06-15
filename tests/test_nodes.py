@@ -41,7 +41,9 @@ def test_update_node():
 
 def test_remove_node_resolves_name_then_uses_high_level_remove():
     node = MagicMock()
-    node.remove.return_value = True
+    # The tool returns True for its documented bool contract, not the SDK call's return value, so a
+    # non-bool here (a plausible future docker-py change) must not leak through.
+    node.remove.return_value = None
     with _patch() as mock_client:
         mock_client.return_value.nodes.get.return_value = node
         assert remove_node("worker-1") is True

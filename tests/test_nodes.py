@@ -39,23 +39,23 @@ def test_update_node():
     node.update.assert_called_once_with(spec)
 
 
-def test_remove_node_resolves_name_to_id_then_uses_low_level_api():
+def test_remove_node_resolves_name_then_uses_high_level_remove():
     node = MagicMock()
-    node.id = "abc123fullid"
+    # The tool returns True for its documented bool contract, not the SDK call's return value, so a
+    # non-bool here (a plausible future docker-py change) must not leak through.
+    node.remove.return_value = None
     with _patch() as mock_client:
         mock_client.return_value.nodes.get.return_value = node
-        mock_client.return_value.api.remove_node.return_value = True
         assert remove_node("worker-1") is True
-    # A name must be resolved to its ID first — APIClient.remove_node only accepts an ID.
+    # The id-or-name is resolved through nodes.get, then removed via the high-level Node.remove().
     mock_client.return_value.nodes.get.assert_called_once_with("worker-1")
-    mock_client.return_value.api.remove_node.assert_called_once_with("abc123fullid", force=False)
+    node.remove.assert_called_once_with(force=False)
 
 
 def test_remove_node_force():
     node = MagicMock()
-    node.id = "abc123fullid"
+    node.remove.return_value = True
     with _patch() as mock_client:
         mock_client.return_value.nodes.get.return_value = node
-        mock_client.return_value.api.remove_node.return_value = True
         assert remove_node("n1", force=True) is True
-    mock_client.return_value.api.remove_node.assert_called_once_with("abc123fullid", force=True)
+    node.remove.assert_called_once_with(force=True)

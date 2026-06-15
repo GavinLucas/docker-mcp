@@ -80,3 +80,40 @@ def test_get_tool_catalog_returns_json_covering_every_tool():
     assert {t["name"] for t in payload["tools"]} == set(TOOL_CATEGORIES)
     assert "DOCKER_MCP_DISABLE" in payload["switches"]
     assert payload["domains"]  # per-domain summary is populated
+
+
+# ---------- DOCKER_MCP_DISABLE also hides a disabled domain's doc sections ----------
+# `_section_enabled` reads the live `server.DISABLED_DOMAINS` (via `is_domain_disabled`), so unlike the
+# import-time tool/prompt gating these can be exercised in-process by monkeypatching that set.
+
+
+def test_list_docs_sections_hides_sections_for_disabled_domains(monkeypatch):
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"scout"}))
+    payload = json.loads(list_docs_sections())
+    assert "scout" not in payload["sections"]
+    assert "scout-cli" not in payload["sections"]
+    assert "scout" not in payload["section_urls"]
+    assert sorted(payload["disabled_sections"]) == ["scout", "scout-cli"]
+    # A different domain's sections are untouched.
+    assert "compose" in payload["sections"]
+
+
+def test_list_docs_sections_disabled_is_empty_by_default():
+    assert json.loads(list_docs_sections())["disabled_sections"] == []
+
+
+def test_get_docs_section_refuses_a_disabled_section(monkeypatch):
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"scout"}))
+    with pytest.raises(ValueError, match="disabled via DOCKER_MCP_DISABLE"):
+        get_docs_section("scout")
+    with pytest.raises(ValueError, match="disabled via DOCKER_MCP_DISABLE"):
+        get_docs_section("scout-cli")
+
+
+def test_get_docs_section_still_serves_enabled_sections_when_another_is_disabled(monkeypatch):
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"scout"}))
+    with patch(
+        "docker_mcp.tools.resources.httpx.get", return_value=_docs_response(b"<html>containers</html>")
+    ) as mock_get:
+        assert get_docs_section("containers") == "<html>containers</html>"
+    assert mock_get.call_args.args[0] == f"{DOCKER_DOCS_BASE_URL}/containers.html"

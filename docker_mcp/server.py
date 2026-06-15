@@ -258,6 +258,33 @@ _seen_tool_names: set[str] = set()
 _tool_registry: dict[str, ToolRecord] = {}
 
 
+@dataclass(frozen=True)
+class PromptRecord:
+    """What the `@prompt()` decorator saw for one prompt: its (optional) domain and whether it registered."""
+
+    name: str
+    domain: str | None
+    registered: bool
+
+
+# Prompts processed by `@prompt()` this run (registered or skipped by DOCKER_MCP_DISABLE), plus the
+# doc-resource section -> domain map that resources.py registers at import. Both let tool_catalog()
+# report the prompts and doc sections a domain switch hides, so the non-tool surface is auditable too.
+_prompt_registry: dict[str, PromptRecord] = {}
+_resource_domains: dict[str, str] = {}
+
+
+def register_resource_domains(section_to_domain: dict[str, str]) -> None:
+    """Record which doc-resource sections belong to which domain (called by resources.py at import)."""
+    _resource_domains.update(section_to_domain)
+
+
+def is_domain_disabled(domain: str | None) -> bool:
+    """True if a (non-None) domain is currently dropped by DOCKER_MCP_DISABLE. Reads the live set, so
+    it reflects test monkeypatching of DISABLED_DOMAINS (unlike the import-time tool/prompt gating)."""
+    return domain is not None and domain in DISABLED_DOMAINS
+
+
 def _domain_for(func: Callable) -> str:
     """Derive a tool's domain from its defining module: docker_mcp.tools.containers -> 'containers'."""
     return (func.__module__ or "").rsplit(".", 1)[-1]
@@ -306,6 +333,13 @@ def tool_catalog() -> dict[str, Any]:
             {"name": r.name, "domain": r.domain, "category": r.category.value, "registered": r.registered}
             for r in records
         ],
+        # The non-tool surface DOCKER_MCP_DISABLE also affects: prompts tied to a disabled domain are
+        # skipped, and doc-resource sections for a disabled domain are hidden from docker-docs://contents.
+        "prompts": [
+            {"name": r.name, "domain": r.domain, "registered": r.registered}
+            for r in sorted(_prompt_registry.values(), key=lambda r: r.name)
+        ],
+        "disabled_doc_sections": sorted(s for s, d in _resource_domains.items() if d in DISABLED_DOMAINS),
     }
 
 
@@ -340,5 +374,25 @@ def tool(**kwargs: Any) -> Callable[[Callable], Callable]:
         if not registered:
             return func
         return mcp.tool(annotations=_annotations_for(name, category), **kwargs)(func)
+
+    return decorator
+
+
+def prompt(description: str, *, domain: str | None = None) -> Callable[[Callable], Callable]:
+    """
+    Register an `@mcp.prompt`, honoring DOCKER_MCP_DISABLE — the `@prompt()` every prompt module uses.
+
+    A prompt tied to a feature area (`domain`) is skipped when that domain is disabled, so a server that
+    drops e.g. `scout` doesn't keep prompts that steer the agent toward tools that are no longer
+    registered. `domain=None` is for general / cross-domain prompts (doc lookup, prune, disk usage) that
+    always register. Gating happens at import like `@tool()`, and the choice is recorded for tool_catalog().
+    """
+
+    def decorator(func: Callable) -> Callable:
+        registered = domain is None or _domain_enabled(domain, DISABLED_DOMAINS)
+        _prompt_registry[func.__name__] = PromptRecord(name=func.__name__, domain=domain, registered=registered)
+        if not registered:
+            return func
+        return mcp.prompt(description=description)(func)
 
     return decorator

@@ -15,14 +15,15 @@ The `docker_mcp` package is the entry point. `docker_mcp/__init__.py` defines `m
 `docker_mcp/server.py` instantiates `FastMCP` and exports two things:
 
 - **`tool`** — the registration decorator every tool module uses. **Always import `tool` from `docker_mcp.server`** and decorate with `@tool()`; never import from the `mcp` package directly in tool files (circular import) and never use `@mcp.tool()` in tool modules.
-- **`mcp`** — the FastMCP singleton, imported only by `prompts.py` / `resources.py` for `@mcp.prompt()` / `@mcp.resource()`.
+- **`prompt`** — the prompt registration decorator `prompts.py` uses (`@prompt(description=..., domain=...)`), analogous to `tool` and gating on `DOCKER_MCP_DISABLE`; never use `@mcp.prompt()` directly in `prompts.py`.
+- **`mcp`** — the FastMCP singleton, imported by `resources.py` for `@mcp.resource()`.
 
 ```python
 from docker_mcp.server import tool   # tool modules
 from docker_mcp.server import mcp    # prompts / resources only
 ```
 
-`server.py` also owns **`TOOL_CATEGORIES`**, the central map classifying every tool as `READ_ONLY` / `MUTATING` / `DESTRUCTIVE`. The `@tool()` decorator uses it to attach MCP `ToolAnnotations` and to skip registration under the env switches `DOCKER_MCP_READONLY` (register only read-only tools) and `DOCKER_MCP_NO_DESTRUCTIVE` (register everything except destructive). It also records each tool's **domain** (its defining module's leaf, e.g. `containers`) so the orthogonal `DOCKER_MCP_DISABLE=<domains>` switch can drop whole feature areas; the live snapshot is the `docker-mcp://tool-catalog` resource (`server.tool_catalog()`). **Every new tool needs a `TOOL_CATEGORIES` entry** — `tests/test_server.py` fails the build if the map drifts from the registered set.
+`server.py` also owns **`TOOL_CATEGORIES`**, the central map classifying every tool as `READ_ONLY` / `MUTATING` / `DESTRUCTIVE`. The `@tool()` decorator uses it to attach MCP `ToolAnnotations` and to skip registration under the env switches `DOCKER_MCP_READONLY` (register only read-only tools) and `DOCKER_MCP_NO_DESTRUCTIVE` (register everything except destructive). It also records each tool's **domain** (its defining module's leaf, e.g. `containers`) so the orthogonal `DOCKER_MCP_DISABLE=<domains>` switch can drop whole feature areas — including that domain's **prompts** (via the `prompt(domain=...)` helper) and its **doc-resource sections** (via `_SECTION_DOMAINS` in `resources.py`), not just its tools; the live snapshot is the `docker-mcp://tool-catalog` resource (`server.tool_catalog()`). **Every new tool needs a `TOOL_CATEGORIES` entry** — `tests/test_server.py` fails the build if the map drifts from the registered set.
 
 ### Tools package (`docker_mcp/tools/`)
 Each file maps to one Docker SDK domain or one CLI/registry feature area. Underscore-prefixed modules are private helpers excluded from the star-import.
@@ -108,11 +109,11 @@ def mcp_example(name: str):
 
 ### MCP resources
 
-`docker_mcp/tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data: the Docker SDK for Python documentation under the `docker-docs://` URI scheme, plus `docker-mcp://tool-catalog` (the live tool/domain/category snapshot). Use the same docstring format as tools.
+`docker_mcp/tools/resources.py` exposes `@mcp.resource(uri, mime_type=...)` endpoints (not tools) for read-only data: the Docker SDK for Python documentation under the `docker-docs://` URI scheme, plus `docker-mcp://tool-catalog` (the live tool/domain/category snapshot). `_SECTION_DOMAINS` maps each doc section to a domain so `DOCKER_MCP_DISABLE` hides a disabled domain's sections (registered with the server via `register_resource_domains`). Use the same docstring format as tools.
 
 ### MCP prompts
 
-`docker_mcp/tools/prompts.py` exposes `@mcp.prompt(description=...)` templates that return prompt strings to guide multi-step docker workflows (deploy, migrate, troubleshoot, prune, audit/security, networking, volume backup/restore, doc lookup). Use the same docstring format as tools.
+`docker_mcp/tools/prompts.py` exposes `@prompt(description=..., domain=...)` templates (the `prompt` helper from `docker_mcp.server`, not `@mcp.prompt` directly) that return prompt strings to guide multi-step docker workflows (deploy, migrate, troubleshoot, prune, audit/security, networking, volume backup/restore, doc lookup). Each declares its primary `domain` so `DOCKER_MCP_DISABLE` drops it with that domain; `domain=None` for general/cross-domain prompts. Use the same docstring format as tools.
 
 ## Docker SDK Policy
 

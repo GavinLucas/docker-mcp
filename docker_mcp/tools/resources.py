@@ -4,7 +4,7 @@ import json
 
 import httpx
 
-from docker_mcp.server import mcp, tool_catalog
+from docker_mcp.server import is_domain_disabled, mcp, register_resource_domains, tool_catalog
 
 DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
 
@@ -55,6 +55,45 @@ EXTERNAL_SECTIONS: dict[str, str] = {
 }
 
 
+# Maps each doc section to the tool domain it documents, so DOCKER_MCP_DISABLE also hides the docs for
+# a disabled feature area (e.g. disabling `scout` hides the `scout` / `scout-cli` sections). Sections
+# with no entry here — general references like `index`, `client`, `dockerfile`, `engine-security` — are
+# always available. Registered with the server so tool_catalog() can report the hidden sections.
+_SECTION_DOMAINS: dict[str, str] = {
+    "containers": "containers",
+    "images": "images",
+    "networks": "networks",
+    "volumes": "volumes",
+    "configs": "configs",
+    "secrets": "secrets",
+    "nodes": "nodes",
+    "services": "services",
+    "swarm": "swarm",
+    "plugins": "plugins",
+    "compose": "compose",
+    "compose-cli": "compose",
+    "compose-file": "compose",
+    "context": "context",
+    "context-cli": "context",
+    "stack": "stack",
+    "stack-cli": "stack",
+    "registry-api": "registry",
+    "oci-distribution-spec": "registry",
+    "hub-api": "registry",
+    "buildx": "buildx",
+    "buildx-cli": "buildx",
+    "buildx-bake": "buildx",
+    "scout": "scout",
+    "scout-cli": "scout",
+}
+register_resource_domains(_SECTION_DOMAINS)
+
+
+def _section_enabled(section: str) -> bool:
+    """A doc section is available unless the domain it documents is dropped by DOCKER_MCP_DISABLE."""
+    return not is_domain_disabled(_SECTION_DOMAINS.get(section))
+
+
 def _section_url(section: str) -> str:
     if section in SDK_SECTIONS:
         return f"{DOCKER_DOCS_BASE_URL}/{section}.html"
@@ -75,21 +114,29 @@ def list_docs_sections() -> str:
 
     returns: str - JSON describing each section's source URL and how to read it
     """
-    section_names: list[str] = [*SDK_SECTIONS, *EXTERNAL_SECTIONS.keys()]
-    section_urls: dict[str, str] = {section: f"{DOCKER_DOCS_BASE_URL}/{section}.html" for section in SDK_SECTIONS}
-    section_urls.update(EXTERNAL_SECTIONS)
+    all_sections: list[str] = [*SDK_SECTIONS, *EXTERNAL_SECTIONS.keys()]
+    # Hide sections whose domain is disabled via DOCKER_MCP_DISABLE, mirroring how disabled tools and
+    # prompts drop out — the agent isn't pointed at docs for a feature area this server doesn't expose.
+    section_names = [s for s in all_sections if _section_enabled(s)]
+    disabled_sections = [s for s in all_sections if not _section_enabled(s)]
+    section_urls: dict[str, str] = {
+        section: f"{DOCKER_DOCS_BASE_URL}/{section}.html" for section in SDK_SECTIONS if _section_enabled(section)
+    }
+    section_urls.update({s: url for s, url in EXTERNAL_SECTIONS.items() if _section_enabled(s)})
     return json.dumps(
         {
             "base_url": DOCKER_DOCS_BASE_URL,
             "sdk_base_url": DOCKER_DOCS_BASE_URL,
             "sections": section_names,
             "section_urls": section_urls,
+            "disabled_sections": disabled_sections,
             "usage": (
                 "Read docker-docs://<section> to fetch the documentation for that section. "
                 "Sections served from `base_url` cover the Docker SDK for Python; the "
                 "remaining sections (see `section_urls`) cover docker CLI features (compose, "
                 "context) and registry HTTP APIs (OCI distribution spec, Docker Hub) that "
-                "this server exposes outside the SDK."
+                "this server exposes outside the SDK. `disabled_sections` lists sections hidden "
+                "because their domain is dropped via DOCKER_MCP_DISABLE."
             ),
         },
         indent=2,
@@ -120,6 +167,11 @@ def get_docs_section(section: str) -> str:
     args: section: str - Section name from `docker-docs://contents`
     returns: str - The HTML (or rendered Markdown) content of the documentation page
     """
+    if not _section_enabled(section):
+        raise ValueError(
+            f"Documentation section '{section}' is unavailable because its domain is disabled via "
+            f"DOCKER_MCP_DISABLE. Read docker-docs://contents for the sections this server exposes."
+        )
     url = _section_url(section)
     resp = httpx.get(url, timeout=_DOCS_TIMEOUT, follow_redirects=True, headers={"User-Agent": _USER_AGENT})
     resp.raise_for_status()

@@ -9,7 +9,7 @@ permissions:
 
 on:
   push:
-    branches: [container-image]
+    branches: [main]
   pull_request:
     paths:
       - 'Dockerfile'

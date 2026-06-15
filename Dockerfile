@@ -24,7 +24,8 @@ ARG DEBIAN_RELEASE=bookworm
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_RELEASE} AS builder
 
 # uv provides fast, lockfile-faithful installs; copy just the binaries from the official image.
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# Pinned by digest (with the version tag for readability) for reproducible, drift-free builds.
+COPY --from=ghcr.io/astral-sh/uv:0.11.21@sha256:ff07b86af50d4d9391d9daf4ff89ce427bc544f9aae87057e69a1cc0aa369946 /uv /uvx /usr/local/bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -68,11 +69,15 @@ RUN if [ "$INSTALL_CLI" = "1" ]; then \
         apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin docker-buildx-plugin; \
         if [ "$INSTALL_SCOUT" = "1" ]; then \
             scout_arch="$(dpkg --print-architecture)"; \
+            scout_tar="docker-scout_${SCOUT_VERSION}_linux_${scout_arch}.tar.gz"; \
+            scout_base="https://github.com/docker/scout-cli/releases/download/v${SCOUT_VERSION}"; \
             mkdir -p /usr/libexec/docker/cli-plugins; \
-            curl -fsSL "https://github.com/docker/scout-cli/releases/download/v${SCOUT_VERSION}/docker-scout_${SCOUT_VERSION}_linux_${scout_arch}.tar.gz" -o /tmp/docker-scout.tgz; \
-            tar -xzf /tmp/docker-scout.tgz -C /usr/libexec/docker/cli-plugins docker-scout; \
+            curl -fsSL "${scout_base}/${scout_tar}" -o "/tmp/${scout_tar}"; \
+            curl -fsSL "${scout_base}/docker-scout_${SCOUT_VERSION}_checksums.txt" -o /tmp/scout_checksums.txt; \
+            (cd /tmp && grep -F "${scout_tar}" scout_checksums.txt | sha256sum -c -); \
+            tar -xzf "/tmp/${scout_tar}" -C /usr/libexec/docker/cli-plugins docker-scout; \
             chmod +x /usr/libexec/docker/cli-plugins/docker-scout; \
-            rm /tmp/docker-scout.tgz; \
+            rm "/tmp/${scout_tar}" /tmp/scout_checksums.txt; \
         fi; \
         apt-get purge -y --auto-remove curl gnupg; \
         rm -rf /var/lib/apt/lists/*; \

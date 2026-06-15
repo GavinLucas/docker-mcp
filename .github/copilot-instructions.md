@@ -12,15 +12,16 @@ This file provides guidance to GitHub Copilot when working with code in this rep
 The `docker_mcp` package is the entry point. `docker_mcp/__init__.py` defines `main()` and side-effect-imports the `server` and `tools` submodules (which registers all `@tool()` decorators); `docker_mcp/__main__.py` calls `main()` so `python -m docker_mcp` works.
 
 ### Server singleton (`docker_mcp/server.py`)
-`docker_mcp/server.py` instantiates `FastMCP` and exports two things:
+`docker_mcp/server.py` instantiates `FastMCP` and exports three things:
 
 - **`tool`** — the registration decorator every tool module uses. **Always import `tool` from `docker_mcp.server`** and decorate with `@tool()`; never import from the `mcp` package directly in tool files (circular import) and never use `@mcp.tool()` in tool modules.
 - **`prompt`** — the prompt registration decorator `prompts.py` uses (`@prompt(description=..., domain=...)`), analogous to `tool` and gating on `DOCKER_MCP_DISABLE`; never use `@mcp.prompt()` directly in `prompts.py`.
 - **`mcp`** — the FastMCP singleton, imported by `resources.py` for `@mcp.resource()`.
 
 ```python
-from docker_mcp.server import tool   # tool modules
-from docker_mcp.server import mcp    # prompts / resources only
+from docker_mcp.server import tool     # tool modules
+from docker_mcp.server import prompt    # prompt modules (with domain=...)
+from docker_mcp.server import mcp       # resource modules only
 ```
 
 `server.py` also owns **`TOOL_CATEGORIES`**, the central map classifying every tool as `READ_ONLY` / `MUTATING` / `DESTRUCTIVE`. The `@tool()` decorator uses it to attach MCP `ToolAnnotations` and to skip registration under the env switches `DOCKER_MCP_READONLY` (register only read-only tools) and `DOCKER_MCP_NO_DESTRUCTIVE` (register everything except destructive). It also records each tool's **domain** (its defining module's leaf, e.g. `containers`) so the orthogonal `DOCKER_MCP_DISABLE=<domains>` switch can drop whole feature areas — including that domain's **prompts** (via the `prompt(domain=...)` helper) and its **doc-resource sections** (via `_SECTION_DOMAINS` in `resources.py`), not just its tools; the live snapshot is the `docker-mcp://tool-catalog` resource (`server.tool_catalog()`). **Every new tool needs a `TOOL_CATEGORIES` entry** — `tests/test_server.py` fails the build if the map drifts from the registered set.

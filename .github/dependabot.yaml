@@ -1,8 +1,8 @@
-# Dependabot keeps GitHub Actions on their latest minor/patch versions so we
-# don't silently fall behind on Node-runtime bumps (e.g. Node 20 -> 24).
-# Python dependencies are managed by uv, so we deliberately don't enable the
-# pip ecosystem here.
+# Keep GitHub Actions reasonably current.
+# For Python/uv dependencies, allow Dependabot to open PRs only when they're
+# security-related, while suppressing normal version-churn PRs.
 version: 2
+
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -12,3 +12,14 @@ updates:
       actions:
         patterns:
           - "*"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"

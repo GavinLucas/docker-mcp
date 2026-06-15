@@ -1,9 +1,9 @@
 # library of mcp prompt templates that guide the agent through common docker workflows
 
-from docker_mcp.server import mcp
+from docker_mcp.server import prompt
 
 
-@mcp.prompt(description="Read the Docker SDK for Python documentation for a section before writing code that uses it.")
+@prompt(description="Read the Docker SDK for Python documentation for a section before writing code that uses it.")
 def lookup_docker_docs(section: str) -> str:
     """
     Ask the agent to consult the Docker SDK for Python documentation for a specific section.
@@ -19,7 +19,7 @@ def lookup_docker_docs(section: str) -> str:
     )
 
 
-@mcp.prompt(description="Verify that a specific Docker SDK method exists before relying on it.")
+@prompt(description="Verify that a specific Docker SDK method exists before relying on it.")
 def verify_docker_method(method: str, section: str) -> str:
     """
     Ask the agent to verify a method of the `docker` module against the live SDK docs.
@@ -35,7 +35,9 @@ def verify_docker_method(method: str, section: str) -> str:
     )
 
 
-@mcp.prompt(description="Deploy a containerized application end-to-end: image, network, volume, container.")
+@prompt(
+    description="Deploy a containerized application end-to-end: image, network, volume, container.", domain="containers"
+)
 def deploy_container(image: str, name: str) -> str:
     """
     Generate a step-by-step plan for deploying a container with supporting resources.
@@ -57,7 +59,7 @@ def deploy_container(image: str, name: str) -> str:
     )
 
 
-@mcp.prompt(description="Troubleshoot a misbehaving container by gathering logs, state, and stats.")
+@prompt(description="Troubleshoot a misbehaving container by gathering logs, state, and stats.", domain="containers")
 def troubleshoot_container(container: str) -> str:
     """
     Generate a diagnostic plan for an unhealthy or failing container.
@@ -77,7 +79,9 @@ def troubleshoot_container(container: str) -> str:
     )
 
 
-@mcp.prompt(description="Replace a running container with a new image while preserving its configuration.")
+@prompt(
+    description="Replace a running container with a new image while preserving its configuration.", domain="containers"
+)
 def migrate_container(container: str, new_image: str) -> str:
     """
     Generate a plan for swapping a container's image without losing its configuration.
@@ -105,7 +109,7 @@ def migrate_container(container: str, new_image: str) -> str:
     )
 
 
-@mcp.prompt(description="Reclaim disk space by pruning unused docker resources.")
+@prompt(description="Reclaim disk space by pruning unused docker resources.")
 def clean_environment(scope: str = "stopped") -> str:
     """
     Generate a plan for safely pruning unused docker resources.
@@ -134,7 +138,7 @@ def clean_environment(scope: str = "stopped") -> str:
     return base
 
 
-@mcp.prompt(description="Inspect every docker resource that shares a label.")
+@prompt(description="Inspect every docker resource that shares a label.")
 def inspect_stack(label: str) -> str:
     """
     Generate a plan for inspecting all resources tagged with a given label.
@@ -152,7 +156,7 @@ def inspect_stack(label: str) -> str:
     )
 
 
-@mcp.prompt(description="Plan a multi-container application from an informal description.")
+@prompt(description="Plan a multi-container application from an informal description.", domain="compose")
 def plan_compose_stack(description: str) -> str:
     """
     Generate a plan for translating an informal app description into docker resources.
@@ -174,7 +178,7 @@ def plan_compose_stack(description: str) -> str:
     )
 
 
-@mcp.prompt(description="Bring up a Docker Compose project and verify it's healthy.")
+@prompt(description="Bring up a Docker Compose project and verify it's healthy.", domain="compose")
 def deploy_compose_project(project_dir: str, project_name: str | None = None) -> str:
     """
     Generate a plan for bringing up a compose project safely.
@@ -201,7 +205,7 @@ def deploy_compose_project(project_dir: str, project_name: str | None = None) ->
     )
 
 
-@mcp.prompt(description="Diagnose a misbehaving Docker Compose project.")
+@prompt(description="Diagnose a misbehaving Docker Compose project.", domain="compose")
 def troubleshoot_compose_project(project_dir: str, project_name: str | None = None) -> str:
     """
     Generate a diagnostic plan for a compose project that isn't behaving.
@@ -227,7 +231,7 @@ def troubleshoot_compose_project(project_dir: str, project_name: str | None = No
     )
 
 
-@mcp.prompt(description="Review available Docker contexts and the one this MCP server is targeting.")
+@prompt(description="Review available Docker contexts and the one this MCP server is targeting.", domain="context")
 def audit_docker_contexts() -> str:
     """
     Generate a plan for inventorying contexts and confirming the daemon target.
@@ -247,7 +251,7 @@ def audit_docker_contexts() -> str:
     )
 
 
-@mcp.prompt(description="Audit the health of a docker swarm: nodes, services, and task convergence.")
+@prompt(description="Audit the health of a docker swarm: nodes, services, and task convergence.", domain="swarm")
 def audit_swarm_health() -> str:
     """
     Generate a plan for assessing whether a swarm and its services are healthy.
@@ -278,7 +282,7 @@ def audit_swarm_health() -> str:
     )
 
 
-@mcp.prompt(description="Find the latest tag for an image without pulling it.")
+@prompt(description="Find the latest tag for an image without pulling it.", domain="registry")
 def find_latest_image_tag(image: str) -> str:
     """
     Generate a plan for picking the right tag of an image from a registry.
@@ -306,7 +310,7 @@ def find_latest_image_tag(image: str) -> str:
     )
 
 
-@mcp.prompt(description="Plan and run a multi-platform image build with buildx.")
+@prompt(description="Plan and run a multi-platform image build with buildx.", domain="buildx")
 def plan_multiarch_build(image: str, platforms: str = "linux/amd64,linux/arm64", context: str = ".") -> str:
     """
     Generate a plan for building and pushing a multi-platform image with buildx.
@@ -334,7 +338,7 @@ def plan_multiarch_build(image: str, platforms: str = "linux/amd64,linux/arm64",
     )
 
 
-@mcp.prompt(description="Audit an image's CVE posture with Docker Scout.")
+@prompt(description="Audit an image's CVE posture with Docker Scout.", domain="scout")
 def audit_image_cves(image: str) -> str:
     """
     Generate a plan for walking through Scout's CVE reporting for an image.
@@ -360,7 +364,7 @@ def audit_image_cves(image: str) -> str:
     )
 
 
-@mcp.prompt(description="Compare two image versions and report the CVE delta.")
+@prompt(description="Compare two image versions and report the CVE delta.", domain="scout")
 def compare_image_versions(old_image: str, new_image: str) -> str:
     """
     Generate a plan for comparing two image references via Scout.
@@ -384,7 +388,7 @@ def compare_image_versions(old_image: str, new_image: str) -> str:
     )
 
 
-@mcp.prompt(description="Recommend a safer base image via Docker Scout.")
+@prompt(description="Recommend a safer base image via Docker Scout.", domain="scout")
 def recommend_base_image(image: str) -> str:
     """
     Generate a plan for picking a better base image using Scout.
@@ -410,7 +414,7 @@ def recommend_base_image(image: str) -> str:
     )
 
 
-@mcp.prompt(description="Inspect a multi-arch manifest list / OCI image index without pulling.")
+@prompt(description="Inspect a multi-arch manifest list / OCI image index without pulling.", domain="buildx")
 def inspect_multiarch_manifest(image: str) -> str:
     """
     Generate a plan for inspecting an image's manifest list.
@@ -438,7 +442,7 @@ def inspect_multiarch_manifest(image: str) -> str:
     )
 
 
-@mcp.prompt(description="Create a multi-arch manifest list from existing per-platform tags.")
+@prompt(description="Create a multi-arch manifest list from existing per-platform tags.", domain="buildx")
 def create_multiarch_manifest(target_tag: str, source_tags: str) -> str:
     """
     Generate a plan for stitching per-platform tags into a manifest list.
@@ -468,7 +472,7 @@ def create_multiarch_manifest(target_tag: str, source_tags: str) -> str:
     )
 
 
-@mcp.prompt(description="Translate `docker manifest …` commands into buildx imagetools equivalents.")
+@prompt(description="Translate `docker manifest …` commands into buildx imagetools equivalents.", domain="buildx")
 def migrate_from_docker_manifest() -> str:
     """
     Generate a reference table mapping each `docker manifest` subcommand to its
@@ -498,7 +502,7 @@ def migrate_from_docker_manifest() -> str:
     )
 
 
-@mcp.prompt(description="Review a Dockerfile for security, correctness, and cache-efficiency issues.")
+@prompt(description="Review a Dockerfile for security, correctness, and cache-efficiency issues.")
 def review_dockerfile(dockerfile_path: str) -> str:
     """
     Generate a plan for reviewing a Dockerfile against Docker's reference and best practices.
@@ -528,7 +532,10 @@ def review_dockerfile(dockerfile_path: str) -> str:
     )
 
 
-@mcp.prompt(description="Audit running containers for risky runtime configuration (privilege, host access).")
+@prompt(
+    description="Audit running containers for risky runtime configuration (privilege, host access).",
+    domain="containers",
+)
 def audit_container_security() -> str:
     """
     Generate a plan for sweeping running containers for dangerous runtime settings.
@@ -558,7 +565,7 @@ def audit_container_security() -> str:
     )
 
 
-@mcp.prompt(description="Diagnose why one container cannot reach another over the network.")
+@prompt(description="Diagnose why one container cannot reach another over the network.", domain="networks")
 def debug_container_networking(source: str, target: str) -> str:
     """
     Generate a plan for diagnosing container-to-container connectivity.
@@ -592,7 +599,7 @@ def debug_container_networking(source: str, target: str) -> str:
     )
 
 
-@mcp.prompt(description="Investigate what is consuming docker disk space before pruning.")
+@prompt(description="Investigate what is consuming docker disk space before pruning.")
 def investigate_disk_usage() -> str:
     """
     Generate a plan for attributing docker disk usage to a cause before reclaiming it.
@@ -620,7 +627,7 @@ def investigate_disk_usage() -> str:
     )
 
 
-@mcp.prompt(description="Back up a named volume's contents to a tar file on the server host.")
+@prompt(description="Back up a named volume's contents to a tar file on the server host.", domain="volumes")
 def backup_volume(volume: str, dest_path: str) -> str:
     """
     Generate a plan for backing up a named volume using a throwaway container.
@@ -653,7 +660,7 @@ def backup_volume(volume: str, dest_path: str) -> str:
     )
 
 
-@mcp.prompt(description="Restore a named volume's contents from a tar file on the server host.")
+@prompt(description="Restore a named volume's contents from a tar file on the server host.", domain="volumes")
 def restore_volume(volume: str, source_path: str) -> str:
     """
     Generate a plan for restoring a named volume from a tar archive using a throwaway container.
@@ -687,7 +694,7 @@ def restore_volume(volume: str, source_path: str) -> str:
     )
 
 
-@mcp.prompt(description="Deploy a Compose file to a swarm as a stack and verify the rollout.")
+@prompt(description="Deploy a Compose file to a swarm as a stack and verify the rollout.", domain="stack")
 def deploy_swarm_stack(stack_name: str, compose_file: str) -> str:
     """
     Generate a plan for deploying a Compose file to a swarm as a stack and confirming it converged.

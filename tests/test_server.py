@@ -10,6 +10,7 @@ from docker_mcp.server import (
     _domain_for,
     _is_truthy,
     _parse_domains,
+    _prompt_registry,
     _seen_tool_names,
     _should_register,
     _tool_registry,
@@ -20,6 +21,10 @@ from docker_mcp.server import (
 
 def _registered_tools() -> dict:
     return mcp._tool_manager._tools
+
+
+def _registered_prompts() -> dict:
+    return mcp._prompt_manager._prompts
 
 
 # ---------- classification stays in sync with the registered tools ----------
@@ -261,3 +266,86 @@ def test_run_container_restart_policy_schema_is_typed():
     rp = schema["$defs"]["RestartPolicy"]["properties"]
     assert set(rp) == {"Name", "MaximumRetryCount"}
     assert set(rp["Name"]["enum"]) == {"no", "always", "on-failure", "unless-stopped"}
+
+
+# ---------- prompt + doc-resource disabling (DOCKER_MCP_DISABLE covers more than tools) ----------
+
+
+def test_every_prompt_recorded_in_registry():
+    # Every registered prompt has a record; by default (no switches) all of them register.
+    registered = set(_registered_prompts())
+    assert registered, "fixture sanity: expected prompts to exist"
+    assert registered <= set(_prompt_registry)
+    assert all(r.registered for r in _prompt_registry.values())
+
+
+def test_scout_prompts_are_tagged_scout():
+    scout = {name for name, r in _prompt_registry.items() if r.domain == "scout"}
+    assert {"audit_image_cves", "compare_image_versions", "recommend_base_image"} <= scout
+
+
+def test_general_prompts_have_no_domain():
+    # Cross-domain / advisory prompts are domain=None so they always register.
+    assert _prompt_registry["lookup_docker_docs"].domain is None
+    assert _prompt_registry["investigate_disk_usage"].domain is None
+
+
+def test_tool_catalog_includes_prompts_and_doc_sections():
+    catalog = tool_catalog()
+    assert {p["name"] for p in catalog["prompts"]} == set(_prompt_registry)
+    # No switches in this process, so everything is registered and nothing is hidden.
+    assert all(p["registered"] for p in catalog["prompts"])
+    assert catalog["disabled_doc_sections"] == []
+
+
+def _registered_prompt_names(env_vars: list[str]) -> set[str]:
+    code = "import docker_mcp; from docker_mcp.server import mcp; print('\\n'.join(mcp._prompt_manager._prompts))"
+    result = subprocess.run(  # noqa: S603 — fixed argv, sys.executable, no shell; trusted test input
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=_env_with(env_vars),
+        check=True,
+    )
+    return {line for line in result.stdout.splitlines() if line}
+
+
+def _all_prompt_names() -> set[str]:
+    return set(_prompt_registry)
+
+
+def _prompt_names_by_domain(*domains: str) -> set[str]:
+    wanted = set(domains)
+    return {name for name, r in _prompt_registry.items() if r.domain in wanted}
+
+
+def test_disable_env_drops_matching_prompts_end_to_end():
+    # Disabling scout removes exactly the scout prompts and leaves every other prompt registered.
+    scout_prompts = _prompt_names_by_domain("scout")
+    assert scout_prompts, "fixture sanity: expected scout prompts to exist"
+    names = _registered_prompt_names(["DOCKER_MCP_DISABLE=scout"])
+    assert names == _all_prompt_names() - scout_prompts
+
+
+def test_disable_env_keeps_general_prompts_end_to_end():
+    # General (domain=None) prompts survive even when several domains are disabled.
+    names = _registered_prompt_names(["DOCKER_MCP_DISABLE=scout,buildx,compose,swarm"])
+    assert "lookup_docker_docs" in names
+    assert "investigate_disk_usage" in names
+
+
+def test_disable_env_reports_hidden_doc_sections_in_catalog_end_to_end():
+    code = (
+        "import json, docker_mcp; from docker_mcp.server import tool_catalog; "
+        "print(json.dumps(tool_catalog()['disabled_doc_sections']))"
+    )
+    result = subprocess.run(  # noqa: S603 — fixed argv, sys.executable, no shell; trusted test input
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env=_env_with(["DOCKER_MCP_DISABLE=scout"]),
+        check=True,
+    )
+    import json
+
+    assert json.loads(result.stdout) == ["scout", "scout-cli"]

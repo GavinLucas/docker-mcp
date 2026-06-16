@@ -90,11 +90,12 @@ def test_clean_environment_all_scope_includes_volumes_with_warning():
 def test_prune_managed_scopes_every_step_to_the_managed_label():
     out = prune_managed()
     assert "docker-mcp-server.managed=true" in out
-    # Inventory across the managed-aware list tools before removing anything.
-    for tool in ("list_containers", "list_networks", "list_services"):
+    # Inventory across the managed-aware list tools — including volumes, so a volume prune is never
+    # confirmed blind — before removing anything.
+    for tool in ("list_containers", "list_networks", "list_volumes", "list_services"):
         assert tool in out
     assert "managed_only=True" in out
-    # Default skips volumes.
+    # Default does not *remove* volumes (prune_volumes only appears with include_volumes).
     assert "prune_volumes" not in out
 
 

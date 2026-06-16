@@ -272,7 +272,11 @@ def _pump_duplex(conn: socket.socket, stream: BidirectionalStream) -> None:
                 if not data:
                     return
                 dst.sendall(data)
-        except OSError:
+        except Exception:  # noqa: BLE001 — any stream/transport error just ends this relay direction
+            # A socket OSError or a paramiko channel error (e.g. EOFError / SSHException) mid-pump
+            # means the connection is over; log and fall through to close the peer. Letting it escape
+            # would surface as an unhandled exception in this daemon thread (and abandon teardown).
+            logger.debug("ssh proxy: relay ended on a stream error", exc_info=True)
             return
         finally:
             _close_quietly(dst)

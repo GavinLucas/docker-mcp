@@ -345,9 +345,13 @@ def test_connection_help_ssh_endpoint_gives_ssh_specific_hints(monkeypatch):
 
 
 def test_connection_help_non_ssh_endpoint_keeps_socket_guidance(monkeypatch):
+    # Exercise the in-container branch so the socket-mount guidance is actually emitted — a non-ssh
+    # endpoint must get the docker.sock hints, not the ssh-specific ones.
     monkeypatch.setenv("DOCKER_HOST", "unix:///var/run/docker.sock")
-    monkeypatch.setattr(client_module, "in_container", lambda: False)
+    monkeypatch.setattr(client_module, "in_container", lambda: True)
+    monkeypatch.setattr(client_module, "classify_host_kernel", lambda: "linux")
     help_text = client_module._connection_help(RuntimeError("boom"))
+    assert "docker.sock" in help_text
     assert "known_hosts" not in help_text
 
 

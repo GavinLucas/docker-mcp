@@ -323,9 +323,12 @@ def _connection_help(exc: BaseException) -> str:
         lines.append(
             "  This is an ssh:// endpoint (paramiko transport). Common causes: the SSH key isn't "
             "loaded (run `ssh-add`, and forward SSH_AUTH_SOCK), or the host key isn't in "
-            "known_hosts — paramiko rejects unknown hosts, so run "
-            "`ssh-keyscan <host> >> ~/.ssh/known_hosts` once (or connect with `ssh` first). In a "
-            "container, mount your `~/.ssh` (key + known_hosts) read-only; no `ssh` binary is needed."
+            "known_hosts — paramiko rejects unknown hosts. Add the host key only after verifying its "
+            "fingerprint out of band: connect once with `ssh <host>` and confirm the prompt, or "
+            "compare `ssh-keyscan <host> | ssh-keygen -lf -` against a trusted fingerprint before "
+            "trusting it (don't blind-append `ssh-keyscan` output — that trusts any key returned, "
+            "MITM included). In a container, mount your `~/.ssh` (key + known_hosts) read-only; no "
+            "`ssh` binary is needed."
         )
         return "\n".join(lines)
     if not in_container():

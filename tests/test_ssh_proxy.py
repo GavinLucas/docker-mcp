@@ -1,3 +1,4 @@
+import os
 import socket
 import threading
 from collections.abc import Callable
@@ -56,6 +57,26 @@ def test_parse_ssh_url_applies_ssh_config_overrides(tmp_path, monkeypatch):
     assert target.proxycommand == "ssh -W 10.0.0.5:2222 bastion"
 
 
+def test_parse_ssh_url_resolves_tilde_in_identity_file(tmp_path, monkeypatch):
+    # paramiko's SSHConfig.lookup() tokenizes a literal "~" to os.path.expanduser("~") itself, so
+    # by the time parse_ssh_url sees the value it should already be a real, usable path with no
+    # literal "~" left — this pins that end-to-end behavior against a fake home directory.
+    config = tmp_path / "config"
+    config.write_text("Host myhost\n    IdentityFile ~/.ssh/id_deploy\n")
+    real_expanduser = os.path.expanduser
+
+    def fake_expanduser(p):
+        if p == "~/.ssh/config":
+            return str(config)
+        if p == "~":
+            return "/home/testuser"
+        return real_expanduser(p)
+
+    monkeypatch.setattr("os.path.expanduser", fake_expanduser)
+    target = parse_ssh_url("ssh://myhost")
+    assert target.key_filename == "/home/testuser/.ssh/id_deploy"
+
+
 def test_parse_ssh_url_explicit_values_win_over_config(tmp_path, monkeypatch):
     config = tmp_path / "config"
     config.write_text("Host myhost\n    User configuser\n    Port 9999\n")
@@ -79,6 +100,20 @@ def test_connect_ssh_client_mirrors_docker_py_defaults(monkeypatch):
     fake_client.load_system_host_keys.assert_called_once()
     fake_client.set_missing_host_key_policy.assert_called_once()
     fake_client.connect.assert_called_once_with(hostname="example.com", port=2222, username="bob")
+
+
+def test_connect_ssh_client_omits_port_when_unresolved(monkeypatch):
+    # No port in the URL and no ~/.ssh/config entry: passing port=None to paramiko would resolve
+    # to port 0 (always refused) instead of paramiko's own default of 22, so the kwarg must be
+    # left out entirely rather than passed through as None.
+    monkeypatch.setattr("os.path.exists", lambda _path: False)
+    fake_client = MagicMock()
+    with patch("docker_mcp.tools._ssh_proxy.paramiko.SSHClient", return_value=fake_client):
+        connect_ssh_client("ssh://bob@example.com")
+    kwargs = fake_client.connect.call_args.kwargs
+    assert "port" not in kwargs
+    assert kwargs["hostname"] == "example.com"
+    assert kwargs["username"] == "bob"
 
 
 def test_connect_ssh_client_passes_key_filename_and_proxycommand(tmp_path, monkeypatch):

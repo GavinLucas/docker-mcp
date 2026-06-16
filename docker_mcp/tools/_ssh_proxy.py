@@ -96,7 +96,9 @@ def parse_ssh_url(url: str) -> SshTarget:
             username = host_config["user"]
         if "identityfile" in host_config:
             identity = host_config["identityfile"]
-            key_filename = identity[0] if isinstance(identity, list) else identity
+            # paramiko's SSHConfig.lookup() already tokenizes `~` to the home dir itself; this
+            # expanduser() call is a no-op backstop in case a future value still has a literal `~`.
+            key_filename = os.path.expanduser(identity[0] if isinstance(identity, list) else identity)
 
     return SshTarget(
         hostname=hostname, port=port, username=username, key_filename=key_filename, proxycommand=proxycommand
@@ -111,7 +113,9 @@ def connect_ssh_client(docker_host: str) -> paramiko.SSHClient:
     loaded and an unknown host key is rejected (`RejectPolicy`, not auto-add); `allow_agent` and
     `look_for_keys` are left at paramiko's own defaults (both True) rather than overridden, exactly
     as docker-py leaves them, so this proxy authenticates with the same credentials docker-py would
-    pick for the same URL.
+    pick for the same URL. Unlike docker-py, `port` is omitted from the connect kwargs entirely when
+    unresolved rather than passed through as `None` — paramiko's own default (22) only applies when
+    the kwarg is absent, and an explicit `None` instead resolves to port 0, which always refuses.
 
     args: docker_host: str - a DOCKER_HOST value starting with 'ssh://'
     returns: paramiko.SSHClient - already connected; caller is responsible for closing it
@@ -120,7 +124,9 @@ def connect_ssh_client(docker_host: str) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(paramiko.RejectPolicy())
-    connect_kwargs: dict = {"hostname": target.hostname, "port": target.port, "username": target.username}
+    connect_kwargs: dict = {"hostname": target.hostname, "username": target.username}
+    if target.port is not None:
+        connect_kwargs["port"] = target.port
     if target.key_filename:
         connect_kwargs["key_filename"] = target.key_filename
     if target.proxycommand:
@@ -153,14 +159,20 @@ def paramiko_dial_stdio_factory(ssh_client: paramiko.SSHClient) -> ChannelFactor
 
 
 def _close_quietly(closable: BidirectionalStream) -> None:
-    """Best-effort shutdown+close; shutdown first reliably unblocks a peer thread's blocking recv()."""
+    """Best-effort shutdown+close; shutdown first reliably unblocks a peer thread's blocking recv().
+
+    Catches broadly on purpose: `closable` may be a `socket.socket` (raises `OSError`) or a
+    `paramiko.Channel` (can raise `paramiko.SSHException` or `EOFError` on an already-torn-down
+    transport) — either way this is teardown-path cleanup that must never leak out and abandon
+    the caller's pump threads unjoined.
+    """
     try:
         closable.shutdown(socket.SHUT_RDWR)
-    except OSError:
+    except Exception:  # noqa: S110, BLE001 — best-effort close; see docstring for why it's broad
         pass
     try:
         closable.close()
-    except OSError:
+    except Exception:  # noqa: S110, BLE001 — best-effort close; see docstring for why it's broad
         pass
 
 

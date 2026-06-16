@@ -79,6 +79,7 @@ jobs:
           done
           tags="${tags#,}"
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Publishing \`${{ matrix.variant }}\` as: $tags" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up QEMU
@@ -115,7 +116,7 @@ jobs:
           # image.source links the GHCR package to this repo (visibility + "connected repository").
           labels: |
             org.opencontainers.image.source=https://github.com/GavinLucas/docker-mcp
-            org.opencontainers.image.version=${{ github.event.release.tag_name || inputs.tag }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
           build-args: |
             INSTALL_CLI=${{ matrix.install_cli }}
             INSTALL_SCOUT=${{ matrix.install_scout }}

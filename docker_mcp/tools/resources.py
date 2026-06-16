@@ -185,7 +185,7 @@ def list_container_resources() -> str:
     URI (a stopped container has no live cgroup to sample). Exited containers include their
     `exit_code` as a triage signal.
 
-    returns: str - JSON array of {id, name, image, status, exit_code?, logs, stats?} entries
+    returns: str - JSON object {"containers": [{id, name, image, status, exit_code?, logs, stats?}, ...]}
     """
     _require_containers_domain()
     entries = []

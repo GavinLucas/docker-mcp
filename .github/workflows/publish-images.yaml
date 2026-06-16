@@ -10,7 +10,7 @@ name: 'Publish container images'
 # (docker.io/gavinlucas/docker-mcp-server) when the DOCKERHUB_USER / DOCKERHUB_TOKEN repo secrets are
 # set. The Docker Hub mirror is opt-in: with the secrets unset the Hub login/tags/description steps are
 # skipped and only GHCR is pushed, so a release never fails for lack of Hub credentials. The Hub token
-# must have Read/Write scope.
+# must have read/write/delete scope (the description-sync API rejects a read/write-only token with 403).
 
 permissions:
   contents: read
@@ -134,4 +134,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: gavinlucas/docker-mcp-server
+          # Dedicated, container-focused readme — the full README.md exceeds Docker Hub's 25,000-byte cap.
+          readme-filepath: ./DOCKERHUB.md
           short-description: "MCP server exposing the Docker SDK for Python and docker CLI as tools for AI agents"

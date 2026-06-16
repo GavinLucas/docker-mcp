@@ -146,6 +146,14 @@ The server connects through `docker.from_env()`, so anything the standard Docker
 }
 ```
 
+**Over SSH.** `DOCKER_HOST=ssh://user@remote-host` is supported via a pure-Python transport (paramiko, pulled in by the `docker[ssh]` dependency) — there is **no system `ssh` binary requirement**, so it works the same on the host install and inside the container images. It authenticates with your normal SSH setup:
+
+- **Keys / agent.** Use key-based auth; load the key into your agent (`ssh-add`) and make sure `SSH_AUTH_SOCK` is set in the server's environment (or place the key at the default `~/.ssh/id_*` path).
+- **Known hosts.** paramiko verifies the host key against `~/.ssh/known_hosts` and **rejects an unknown host**, so connect once with `ssh user@remote-host` first, or run `ssh-keyscan remote-host >> ~/.ssh/known_hosts`.
+- **In a container.** Mount your SSH material read-only — `-v $HOME/.ssh:/root/.ssh:ro` (key + `known_hosts`) — or forward your agent socket; no socket mount and no `ssh` package needed.
+
+The `ssh://` endpoint covers the docker-py-backed tools (the large majority). CLI-backed tools (Compose, Buildx, Context, Scout) shell out to the `docker` CLI, which uses the *system* `ssh` over an `ssh://` endpoint — so those specific tools additionally need an `ssh` client on the host running this server; they are not in scope for the bundled container images.
+
 ### What the agent can do
 
 Once loaded, the agent gets MCP tools grouped by Docker domain. A few examples:

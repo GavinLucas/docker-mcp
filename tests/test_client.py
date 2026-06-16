@@ -331,3 +331,26 @@ def test_startup_preflight_success_in_container_pins_self(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "(rootless)" in err
     assert "self-termination guard active" in err
+
+
+def test_connection_help_ssh_endpoint_gives_ssh_specific_hints(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "ssh://user@remote")
+    help_text = client_module._connection_help(RuntimeError("boom"))
+    assert "ssh://" in help_text
+    # The ssh branch must call out the paramiko-specific gotchas, not socket-mount advice.
+    assert "known_hosts" in help_text
+    assert "paramiko" in help_text
+    # And it must not fall through to the unix-socket guidance.
+    assert "docker.sock" not in help_text
+
+
+def test_connection_help_non_ssh_endpoint_keeps_socket_guidance(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "unix:///var/run/docker.sock")
+    monkeypatch.setattr(client_module, "in_container", lambda: False)
+    help_text = client_module._connection_help(RuntimeError("boom"))
+    assert "known_hosts" not in help_text
+
+
+def test_paramiko_is_available_for_ssh_transport():
+    # The docker[ssh] extra must keep paramiko installed so ssh:// works via the pure-Python transport.
+    import paramiko  # noqa: F401

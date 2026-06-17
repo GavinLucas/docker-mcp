@@ -90,7 +90,11 @@ def test_triage_incident_correlates_events_with_current_state():
 
 def test_triage_incident_threads_window_into_events_since():
     out = triage_incident(window_minutes=15)
-    assert '"15m"' in out
+    # `events(since=...)` takes an absolute timestamp (Unix epoch / RFC3339), not a relative
+    # duration — the prompt threads the window in as a count to convert, never as a "15m" string.
+    assert "15 minutes ago" in out
+    assert "15m" not in out
+    assert "epoch" in out.lower()
 
 
 def test_migrate_container_preserves_config_with_rename_rollback():

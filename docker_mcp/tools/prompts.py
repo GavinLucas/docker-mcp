@@ -134,10 +134,12 @@ def triage_incident(window_minutes: int = 30) -> str:
     return (
         f"Triage a docker incident on this host. Work from what changed in the last {window_minutes} "
         "minutes toward a single suspect. This is diagnosis — change nothing:\n"
-        f'1. Pull the recent daemon event log: `events(since="{window_minutes}m", '
-        'filters={"type": "container"}, limit=200)`. Scan for `die`, `oom`, `kill`, `health_status: '
-        "unhealthy`, and tight `start`/`die` cycles (a crash loop). These are your timeline of what "
-        "broke and roughly when.\n"
+        "1. Pull the recent daemon event log so you have a timeline of what broke and when. The "
+        "`events` tool's `since` takes an absolute timestamp (a Unix epoch integer or an RFC3339 "
+        f"string), not a relative duration — compute the timestamp for {window_minutes} minutes ago "
+        f"and pass it: `events(since=<unix epoch for {window_minutes} minutes ago>, "
+        'filters={"type": "container"}, limit=200)`. Scan for `die`, `oom`, `kill`, '
+        "`health_status: unhealthy`, and tight `start`/`die` cycles (a crash loop).\n"
         "2. Read the MCP resource `docker://containers` for current state. Reconcile it with the event "
         "timeline: a container that has a recent `die` event and is now `restarting` or `exited` with a "
         "non-zero `exit_code` is the prime suspect.\n"

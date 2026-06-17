@@ -80,6 +80,80 @@ def troubleshoot_container(container: str) -> str:
 
 
 @prompt(
+    description="Sweep every running container for health and resource pressure (read-only monitoring).",
+    domain="containers",
+)
+def monitor_container_fleet(top: int = 5) -> str:
+    """
+    Generate a read-only monitoring sweep across all containers, ranked by resource pressure.
+
+    Unlike `troubleshoot_container` (which needs a named target), this starts from the whole fleet and
+    surfaces what is unhealthy or under load — the entry point when you don't yet know what's wrong.
+    It leans on the observability resources: `docker://containers` to enumerate, then `docker-stats://`
+    and `docker-logs://` per container.
+
+    args: top: int - How many heaviest containers to drill into with logs (default 5)
+    returns: str - A prompt instructing the agent to enumerate, sample stats, and rank by pressure
+    """
+    return (
+        "Take a read-only health and load snapshot of every container on this host. Change nothing:\n"
+        "1. Read the MCP resource `docker://containers` to enumerate every container. Each entry carries "
+        "its `status`, an `exit_code` when it has exited, and per-container `logs`/`stats` resource URIs.\n"
+        "2. Immediately flag the non-healthy set: anything `exited` with a non-zero `exit_code`, "
+        "`restarting` (a likely crash loop), `paused`, or `dead`. List those first — they matter more "
+        "than load.\n"
+        "3. For each container whose `status` is `running`, read its `docker-stats://{name}` resource for "
+        "a CPU%, memory used/limit/%, and net/block I/O snapshot. Note that this is a single instantaneous "
+        "sample, not an average — a one-off spike is not the same as sustained pressure.\n"
+        f"4. Rank the running containers by resource pressure and drill into the top {top}: read each "
+        "one's `docker-logs://{name}` resource for a recent tail and surface any error/restart lines. "
+        "Cross-reference memory% near 100 (OOM-kill risk) and CPU pinned at a limit.\n"
+        "5. For any container flagged unhealthy in step 2, read its `docker-logs://{name}` (logs are "
+        "readable even on a stopped container) to capture why it exited or is looping.\n"
+        "Render one table: name, status, CPU%, mem%, and a one-line health note per container, sorted "
+        "with problems on top. End with a one-paragraph verdict naming the single container most worth "
+        "attention and point at `troubleshoot_container` for a deep dive on it. Recommend nothing "
+        "destructive."
+    )
+
+
+@prompt(
+    description="Triage a host-wide incident from symptoms when you don't yet know which container is at fault.",
+    domain="containers",
+)
+def triage_incident(window_minutes: int = 30) -> str:
+    """
+    Generate a symptom-first incident-triage plan that narrows from the whole host to a suspect.
+
+    The on-call entry point: start from what just changed (`events`) and the current fleet state
+    (`docker://containers`), narrow to the likely culprit, then hand off to `troubleshoot_container`.
+
+    args: window_minutes: int - How far back to pull the daemon event log (default 30)
+    returns: str - A prompt instructing the agent to correlate recent events with current state
+    """
+    return (
+        f"Triage a docker incident on this host. Work from what changed in the last {window_minutes} "
+        "minutes toward a single suspect. This is diagnosis — change nothing:\n"
+        f'1. Pull the recent daemon event log: `events(since="{window_minutes}m", '
+        'filters={"type": "container"}, limit=200)`. Scan for `die`, `oom`, `kill`, `health_status: '
+        "unhealthy`, and tight `start`/`die` cycles (a crash loop). These are your timeline of what "
+        "broke and roughly when.\n"
+        "2. Read the MCP resource `docker://containers` for current state. Reconcile it with the event "
+        "timeline: a container that has a recent `die` event and is now `restarting` or `exited` with a "
+        "non-zero `exit_code` is the prime suspect.\n"
+        "3. Separate cause from symptom. A host under memory or disk pressure takes down healthy "
+        "containers too — read `docker-stats://{name}` for the running set to spot a resource hog, and "
+        "call `df` if you suspect the daemon itself is out of disk. If many unrelated containers failed "
+        "at once, suspect the host or daemon, not any one container.\n"
+        "4. For the prime suspect, read `docker-logs://{name}` for the error that preceded the first "
+        "`die` in the timeline.\n"
+        "State, in two sentences, the most likely root cause and the blast radius (one container, or "
+        "host-wide). Then hand off: name the container for a `troubleshoot_container` deep dive, or flag "
+        "the host-level fix. Propose remediation but do not perform it."
+    )
+
+
+@prompt(
     description="Replace a running container with a new image while preserving its configuration.", domain="containers"
 )
 def migrate_container(container: str, new_image: str) -> str:

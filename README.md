@@ -198,6 +198,8 @@ Many AI clients let you invoke registered MCP prompts directly (in Claude Code, 
 
 ```
 /deploy_container image=nginx:1.27 name=web
+/monitor_container_fleet
+/triage_incident window_minutes=30
 /troubleshoot_container container=api-1
 /migrate_container container=api-1 new_image=myorg/api:v2
 /inspect_stack label=com.example.app=web

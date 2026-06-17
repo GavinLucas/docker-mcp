@@ -18,12 +18,14 @@ from docker_mcp.tools.prompts import (
     lookup_docker_docs,
     migrate_container,
     migrate_from_docker_manifest,
+    monitor_container_fleet,
     prune_managed,
     plan_compose_stack,
     plan_multiarch_build,
     recommend_base_image,
     restore_volume,
     review_dockerfile,
+    triage_incident,
     troubleshoot_compose_project,
     troubleshoot_container,
     verify_docker_method,
@@ -55,6 +57,44 @@ def test_troubleshoot_container_covers_logs_and_state():
     assert "api-1" in out
     for tool in ("get_container", "container_logs", "container_stats", "exec_in_container"):
         assert tool in out
+
+
+def test_monitor_container_fleet_enumerates_via_resource_and_ranks():
+    out = monitor_container_fleet()
+    # Enumeration starts from the index resource, then drills via the per-container resources.
+    assert "docker://containers" in out
+    assert "docker-stats://" in out
+    assert "docker-logs://" in out
+    # It's a read-only sweep that ranks by pressure, not a single-target tool.
+    assert out.index("docker://containers") < out.index("docker-stats://")
+    assert "troubleshoot_container" in out  # hands off the deep dive
+    assert "destructive" in out.lower() or "read-only" in out.lower()
+
+
+def test_monitor_container_fleet_threads_top_argument():
+    out = monitor_container_fleet(top=3)
+    assert "top 3" in out
+
+
+def test_triage_incident_correlates_events_with_current_state():
+    out = triage_incident()
+    # Symptom-first: start from what changed (events) and reconcile with the live index.
+    assert "events" in out
+    assert "docker://containers" in out
+    assert out.index("events") < out.index("docker://containers")
+    # Must separate a single-container fault from host-wide pressure, and hand off the deep dive.
+    assert "df" in out
+    assert "troubleshoot_container" in out
+    assert "root cause" in out.lower()
+
+
+def test_triage_incident_threads_window_into_events_since():
+    out = triage_incident(window_minutes=15)
+    # `events(since=...)` takes an absolute timestamp (Unix epoch / RFC3339), not a relative
+    # duration — the prompt threads the window in as a count to convert, never as a "15m" string.
+    assert "15 minutes ago" in out
+    assert "15m" not in out
+    assert "epoch" in out.lower()
 
 
 def test_migrate_container_preserves_config_with_rename_rollback():

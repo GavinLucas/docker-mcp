@@ -352,6 +352,36 @@ def _annotations_for(name: str, category: ToolCategory) -> ToolAnnotations:
     )
 
 
+# JSON Schema keywords whose value is a {name: subschema} map — their keys are caller-supplied
+# names (a property literally named "title", a $def called "title"), NOT schema keywords, so we
+# must recurse into the values without ever treating those keys as a title annotation to drop.
+_SCHEMA_NAME_MAPS = frozenset({"properties", "$defs", "definitions", "patternProperties", "dependentSchemas"})
+
+
+def _strip_schema_titles(node: Any) -> None:
+    """
+    Recursively delete `title` annotations from a JSON Schema, in place.
+
+    pydantic stamps a `title` on every property and `$def` (the title-cased field name, e.g.
+    `cache_from` -> "Cache From"), plus a top-level `<tool>Arguments` title. These carry no
+    information the client doesn't already have from the property name, yet across 161 tools they
+    were ~10% of the entire advertised tool surface. The schema dict is display-only (call-time
+    validation runs off the tool's separate `fn_metadata`), so stripping it is purely cosmetic
+    token savings with no behavioral effect.
+    """
+    if isinstance(node, dict):
+        node.pop("title", None)
+        for key, value in node.items():
+            if key in _SCHEMA_NAME_MAPS and isinstance(value, dict):
+                for subschema in value.values():
+                    _strip_schema_titles(subschema)
+            else:
+                _strip_schema_titles(value)
+    elif isinstance(node, list):
+        for item in node:
+            _strip_schema_titles(item)
+
+
 def tool(**kwargs: Any) -> Callable[[Callable], Callable]:
     """
     Register an @mcp.tool with central classification — the drop-in `@tool()` every tool module uses.
@@ -373,7 +403,12 @@ def tool(**kwargs: Any) -> Callable[[Callable], Callable]:
         _tool_registry[name] = ToolRecord(name=name, domain=domain, category=category, registered=registered)
         if not registered:
             return func
-        return mcp.tool(annotations=_annotations_for(name, category), **kwargs)(func)
+        decorated = mcp.tool(annotations=_annotations_for(name, category), **kwargs)(func)
+        # Drop pydantic's information-free `title` annotations from the advertised input schema.
+        registered_tool = mcp._tool_manager.get_tool(kwargs.get("name") or name)
+        if registered_tool is not None:
+            _strip_schema_titles(registered_tool.parameters)
+        return decorated
 
     return decorator
 

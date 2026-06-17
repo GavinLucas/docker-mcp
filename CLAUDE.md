@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `docker-mcp` is a Python MCP server (requires Python >=3.14) managed with `uv` that exposes the Docker SDK for Python as MCP tools. The entry point is the `docker_mcp` package, run with `python -m docker_mcp` or via the installed console script. It is **published to PyPI as `docker-mcp-server`** (the `docker-mcp` name was already taken) and as a container image to GHCR (`ghcr.io/gavinlucas/docker-mcp-server`), mirrored to Docker Hub (`gavinlucas/docker-mcp-server`) when the opt-in `DOCKERHUB_*` release secrets are configured; the import package stays `docker_mcp` and the repo stays `…/docker-mcp`. Two console scripts are installed — `docker-mcp` and `docker-mcp-server` — both targeting `docker_mcp:main`.
 
-The `docker` dependency is pulled with its `[ssh]` extra (paramiko), so `DOCKER_HOST=ssh://…` works through a pure-Python transport — no system `ssh` binary, identical on the host and in the container images. docker-py auto-selects paramiko for `ssh://` when present, so there is no transport code to maintain (just the `ssh://` branch in `client._connection_help`). CLI-backed tools over `ssh://` are the exception — they shell out to `docker`, which uses the *system* `ssh` — and are an out-of-scope, best-effort path.
+The `docker` dependency is pulled with its `[ssh]` extra (paramiko), so `DOCKER_HOST=ssh://…` works through a pure-Python transport — no system `ssh` binary, identical on the host and in the container images. docker-py auto-selects paramiko for `ssh://` when present, so there is no transport code to maintain (just the `ssh://` branch in `client._connection_help`). CLI-backed tools (Compose, Buildx, Context, Scout) shell out to `docker`, which would otherwise use the *system* `ssh` — instead, `_cli.py:run_docker` detects `DOCKER_HOST=ssh://…` and routes the subprocess through a per-call local TCP proxy (`docker_mcp/tools/_ssh_proxy.py`) that opens its own paramiko connection (mirroring docker-py's `SSHHTTPAdapter` defaults) and runs `docker system dial-stdio` over it, so the CLI authenticates identically to the docker-py-backed tools with no system `ssh` binary involved (the one exception being a `ProxyCommand` in `~/.ssh/config` for bastion/jump-host setups, which paramiko runs as an external command — commonly `ssh -W %h:%p ...` — same as it would for the docker-py-backed tools).
 
 ## Commands
 
@@ -61,6 +61,7 @@ Each file maps to one Docker SDK domain (or, for CLI-only and registry-only feat
 | File | Domain | Backed by |
 |------|--------|-----------|
 | `docker_mcp/tools/_cli.py` | Cross-platform subprocess helper (private) | — |
+| `docker_mcp/tools/_ssh_proxy.py` | Per-call paramiko proxy that lets CLI-backed tools dial `ssh://` daemons without a system `ssh` binary (private) | — |
 | `docker_mcp/tools/_utils.py` | Shared helpers (private) | — |
 | `docker_mcp/tools/_labels.py` | Provenance labels stamped on created resources (private) | — |
 | `docker_mcp/tools/client.py` | `DockerClient` — connection and low-level client | docker-py |

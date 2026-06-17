@@ -117,6 +117,108 @@ def test_run_docker_env_allowlist_drops_unrelated_vars(monkeypatch):
     assert "MY_SECRET" not in env
 
 
+def test_run_docker_rewrites_ssh_docker_host_to_local_proxy(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "ssh://bob@example.com")
+    fake_proxy = MagicMock()
+    fake_proxy.port = 54321
+
+    class FakeProxyCtx:
+        def __enter__(self):
+            return fake_proxy
+
+        def __exit__(self, *exc_info):
+            return False
+
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.ssh_proxy_for_docker_host", return_value=FakeProxyCtx()) as ssh_proxy,
+    ):
+        run_docker(["ps", "-a"])
+    ssh_proxy.assert_called_once_with("ssh://bob@example.com", timeout=60.0)
+    env = run.call_args.kwargs["env"]
+    assert env["DOCKER_HOST"] == "tcp://127.0.0.1:54321"
+
+
+def test_run_docker_passes_its_own_timeout_to_ssh_proxy_setup(monkeypatch):
+    # The paramiko connect that stands up the proxy runs before subprocess.run's own timeout
+    # enforcement kicks in, so it must be bounded by this call's timeout too — otherwise a slow or
+    # unreachable ssh:// host could hang past the caller's deadline regardless of what's passed here.
+    monkeypatch.setenv("DOCKER_HOST", "ssh://bob@example.com")
+    fake_proxy = MagicMock()
+    fake_proxy.port = 54321
+
+    class FakeProxyCtx:
+        def __enter__(self):
+            return fake_proxy
+
+        def __exit__(self, *exc_info):
+            return False
+
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()),
+        patch("docker_mcp.tools._cli.ssh_proxy_for_docker_host", return_value=FakeProxyCtx()) as ssh_proxy,
+    ):
+        run_docker(["ps", "-a"], timeout=5.0)
+    ssh_proxy.assert_called_once_with("ssh://bob@example.com", timeout=5.0)
+
+
+def test_run_docker_leaves_non_ssh_docker_host_untouched(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "tcp://example:2375")
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.ssh_proxy_for_docker_host") as ssh_proxy,
+    ):
+        run_docker(["ps", "-a"])
+    ssh_proxy.assert_not_called()
+    env = run.call_args.kwargs["env"]
+    assert env["DOCKER_HOST"] == "tcp://example:2375"
+
+
+def test_run_docker_drops_forwarded_tls_env_when_rewriting_ssh_host(monkeypatch):
+    # A native ssh:// DOCKER_HOST ignores TLS entirely; if leftover DOCKER_TLS_VERIFY/
+    # DOCKER_CERT_PATH from the environment survived the rewrite to tcp://127.0.0.1:<port>, the
+    # CLI would attempt a TLS handshake against the plaintext local proxy and every call would fail.
+    monkeypatch.setenv("DOCKER_HOST", "ssh://bob@example.com")
+    monkeypatch.setenv("DOCKER_TLS_VERIFY", "1")
+    monkeypatch.setenv("DOCKER_CERT_PATH", "/certs")
+    fake_proxy = MagicMock()
+    fake_proxy.port = 54321
+
+    class FakeProxyCtx:
+        def __enter__(self):
+            return fake_proxy
+
+        def __exit__(self, *exc_info):
+            return False
+
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+        patch("docker_mcp.tools._cli.ssh_proxy_for_docker_host", return_value=FakeProxyCtx()),
+    ):
+        run_docker(["ps", "-a"])
+    env = run.call_args.kwargs["env"]
+    assert "DOCKER_TLS_VERIFY" not in env
+    assert "DOCKER_CERT_PATH" not in env
+
+
+def test_run_docker_keeps_tls_env_for_non_ssh_docker_host(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "tcp://example:2376")
+    monkeypatch.setenv("DOCKER_TLS_VERIFY", "1")
+    monkeypatch.setenv("DOCKER_CERT_PATH", "/certs")
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+    ):
+        run_docker(["ps", "-a"])
+    env = run.call_args.kwargs["env"]
+    assert env["DOCKER_TLS_VERIFY"] == "1"
+    assert env["DOCKER_CERT_PATH"] == "/certs"
+
+
 def test_run_docker_extra_env_overlays_allowlist(monkeypatch):
     monkeypatch.setenv("PATH", "/usr/bin")
     with (

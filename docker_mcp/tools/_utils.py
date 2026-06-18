@@ -3,7 +3,7 @@
 import os
 import tempfile
 from collections.abc import Iterable
-from importlib.metadata import PackageNotFoundError
+from functools import lru_cache
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
@@ -55,12 +55,20 @@ _PSEUDO_FSTYPES = frozenset(
 )
 
 
+@lru_cache(maxsize=1)
 def package_version() -> str:
-    """Installed docker-mcp-server version, or '0+unknown' from a source checkout without dist metadata."""
+    """
+    Installed docker-mcp-server version, or 'unknown' when it can't be resolved.
+
+    The single version resolver for every externally-visible surface (User-Agent strings, provenance
+    labels), so they always agree. Called at import time to build module-level User-Agent constants,
+    so it must never raise — any metadata-lookup failure (not just a missing package) falls back to
+    'unknown' rather than crashing the importing module. Cached: the metadata lookup is done once.
+    """
     try:
         return _pkg_version("docker-mcp-server")
-    except PackageNotFoundError:
-        return "0+unknown"
+    except Exception:  # noqa: BLE001 — import-time helper must never raise; any failure -> safe fallback
+        return "unknown"
 
 
 def in_container() -> bool:

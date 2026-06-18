@@ -12,10 +12,8 @@
 # DOCKER_MCP_SERVER_NO_LABELS=1 to suppress it entirely.
 
 from datetime import UTC, datetime
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as _pkg_version
 
-from docker_mcp.tools._utils import env_flag
+from docker_mcp.tools._utils import env_flag, package_version
 
 # Prefix for the provenance labels. A single constant so the namespace is trivially rebrandable.
 # Deliberately *not* reverse-DNS: the project name is distinctive enough to make a collision
@@ -32,14 +30,6 @@ MANAGED_LABEL = f"{LABEL_PREFIX}.managed"
 MANAGED_FILTER = f"{MANAGED_LABEL}=true"
 
 
-def _server_version() -> str:
-    """The installed package version, or 'unknown' from a source checkout without dist metadata."""
-    try:
-        return _pkg_version("docker-mcp-server")
-    except PackageNotFoundError:
-        return "unknown"
-
-
 def provenance_labels(created_by: str) -> dict[str, str]:
     """
     The MCP-provenance label set for a resource this server creates, or {} when stamping is disabled.
@@ -50,7 +40,7 @@ def provenance_labels(created_by: str) -> dict[str, str]:
         return {}
     return {
         MANAGED_LABEL: "true",
-        f"{LABEL_PREFIX}.version": _server_version(),
+        f"{LABEL_PREFIX}.version": package_version(),
         f"{LABEL_PREFIX}.tool": created_by,
         f"{LABEL_PREFIX}.created": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }

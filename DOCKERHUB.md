@@ -13,7 +13,7 @@ The only host prerequisite is Docker. Point your MCP client at `docker run`:
 ```json
 {
   "mcpServers": {
-    "docker-mcp": {
+    "docker-mcp-server": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
@@ -37,7 +37,7 @@ Two multi-arch (linux/amd64 + linux/arm64) variants are published, both built fr
 | `full` *(default)* | `:latest`, `:<version>` | ~510 MB | docker CLI + compose + buildx + **scout** |
 | `no-scout` | `:no-scout`, `:<version>-no-scout` | ~315 MB | docker CLI + compose + buildx |
 
-Scout's plugin binary accounts for the ~195 MB difference. The `no-scout` image also defaults `DOCKER_MCP_DISABLE=scout`, so the scout *tools* aren't registered — the agent sees a smaller, fully-working tool list rather than scout tools that error on every call.
+Scout's plugin binary accounts for the ~195 MB difference. The `no-scout` image also defaults `DOCKER_MCP_SERVER_DISABLE=scout`, so the scout *tools* aren't registered — the agent sees a smaller, fully-working tool list rather than scout tools that error on every call.
 
 ## Reaching the daemon
 
@@ -62,9 +62,11 @@ If you call one of these tools with a path that isn't on a bind mount, the serve
 
 Set these in the client's `env` block. Three switches restrict which tools are registered at startup (a disabled tool never appears in the client's tool list):
 
-- **`DOCKER_MCP_READONLY`** — register only read-only tools.
-- **`DOCKER_MCP_NO_DESTRUCTIVE`** — everything except destructive tools (`remove_*`, `prune_*`, `kill_container`, `compose_down`, …).
-- **`DOCKER_MCP_DISABLE`** — comma-separated *domains* to drop wholesale (e.g. `swarm,services,nodes,configs,secrets` for a single-host server).
+- **`DOCKER_MCP_SERVER_READONLY`** — register only read-only tools.
+- **`DOCKER_MCP_SERVER_NO_DESTRUCTIVE`** — everything except destructive tools (`remove_*`, `prune_*`, `kill_container`, `compose_down`, …).
+- **`DOCKER_MCP_SERVER_DISABLE`** — comma-separated *domains* to drop wholesale (e.g. `swarm,services,nodes,configs,secrets` for a single-host server).
+
+The older `DOCKER_MCP_*` spellings of these variables still work as deprecated aliases (the canonical `DOCKER_MCP_SERVER_*` name wins when both are set).
 
 `DOCKER_HOST` / `DOCKER_TLS_VERIFY` / `DOCKER_CERT_PATH` retarget the daemon (e.g. `-e DOCKER_HOST=tcp://remote-host:2375`).
 

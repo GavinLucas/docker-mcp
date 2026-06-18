@@ -28,7 +28,8 @@ _CONNECT_ERRORS: tuple[type[BaseException], ...] = (DockerException, requests.ex
 # Stays None on the host install or whenever we can't identify ourselves, which leaves the
 # self-termination guard inert. Env var lets an operator who really means it bypass the guard.
 _self_container_id: str | None = None
-_SELF_TERMINATE_OVERRIDE_ENV = "DOCKER_MCP_ALLOW_SELF_TERMINATE"
+_SELF_TERMINATE_OVERRIDE_ENV = "DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE"
+_LEGACY_SELF_TERMINATE_OVERRIDE_ENV = "DOCKER_MCP_ALLOW_SELF_TERMINATE"  # deprecated alias, still honored
 
 
 def _detect_self_container_id(client: docker.DockerClient) -> str | None:
@@ -60,14 +61,14 @@ def guard_not_self(container: Container) -> None:
     An accident guard, not a security boundary: it only constrains calls made through this server's
     tools. A human recovering a wedged server runs `docker rm -f` from their own shell, which never
     touches this server. Inert when we aren't containerized or couldn't identify ourselves, and
-    bypassable with DOCKER_MCP_ALLOW_SELF_TERMINATE=1.
+    bypassable with DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE=1.
     """
     if _self_container_id is None or container.id != _self_container_id:
         return
-    if env_flag(_SELF_TERMINATE_OVERRIDE_ENV):
+    if env_flag(_SELF_TERMINATE_OVERRIDE_ENV, _LEGACY_SELF_TERMINATE_OVERRIDE_ENV):
         return
     raise RuntimeError(
-        f"Refusing to operate on the docker-mcp server's own container ({container.short_id} "
+        f"Refusing to operate on the docker-mcp-server's own container ({container.short_id} "
         f"{container.name}) — this would terminate the MCP session mid-call. Set "
         f"{_SELF_TERMINATE_OVERRIDE_ENV}=1 to override, or run the action from the host shell "
         f"(e.g. `docker rm -f`), which bypasses this server entirely."
@@ -302,7 +303,7 @@ def reconnect(docker_host: str | None = None) -> dict:
 
 def _connection_help(exc: BaseException) -> str:
     """OS-aware guidance, emitted when the startup ping fails, for getting the daemon reachable."""
-    lines = [f"docker-mcp: cannot reach the Docker daemon ({exc})."]
+    lines = [f"docker-mcp-server: cannot reach the Docker daemon ({exc})."]
     host = os.environ.get("DOCKER_HOST")
     if host:
         lines.append(f"  DOCKER_HOST is set to {host} — verify that endpoint is reachable.")
@@ -362,7 +363,7 @@ def _connection_summary(client: docker.DockerClient) -> str:
             if _self_container_id
             else "; self-termination guard inactive (could not identify own container)"
         )
-    return f"docker-mcp: connected to Docker daemon — {os_name}{suffix}{note}."
+    return f"docker-mcp-server: connected to Docker daemon — {os_name}{suffix}{note}."
 
 
 def startup_preflight() -> None:

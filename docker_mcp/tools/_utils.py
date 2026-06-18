@@ -3,8 +3,13 @@
 import os
 import tempfile
 from collections.abc import Iterable
+from functools import lru_cache
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
+
+# Alias-aware env lookups, re-exported so tool modules can keep importing them from _utils.
+from docker_mcp._env import env_flag, read_env  # noqa: F401
 
 # Default cap (32 MiB) for tools that buffer a daemon-side byte stream *in band* and return it
 # through the MCP protocol (where it is base64-encoded into the agent's context). Anything larger
@@ -15,7 +20,8 @@ MAX_PAYLOAD_BYTES = 33_554_432
 # Set in our published container images so the in-container guards engage even if /.dockerenv is
 # ever absent (e.g. an unusual runtime). On the host (uvx) install neither signal is present, so
 # every guard below is a no-op and the existing behaviour is unchanged.
-IN_CONTAINER_ENV = "DOCKER_MCP_IN_CONTAINER"
+IN_CONTAINER_ENV = "DOCKER_MCP_SERVER_IN_CONTAINER"
+_LEGACY_IN_CONTAINER_ENV = "DOCKER_MCP_IN_CONTAINER"  # deprecated alias, still honored
 
 # /proc/self/mountinfo fstypes that never represent a host bind mount: the container's own overlay
 # root and the assorted pseudo / in-memory filesystems. A path whose nearest mount is one of these
@@ -49,9 +55,20 @@ _PSEUDO_FSTYPES = frozenset(
 )
 
 
-def env_flag(name: str) -> bool:
-    """True if the named environment variable is set to a truthy value (1/true/yes/on)."""
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+@lru_cache(maxsize=1)
+def package_version() -> str:
+    """
+    Installed docker-mcp-server version, or 'unknown' when it can't be resolved.
+
+    The single version resolver for every externally-visible surface (User-Agent strings, provenance
+    labels), so they always agree. Called at import time to build module-level User-Agent constants,
+    so it must never raise — any metadata-lookup failure (not just a missing package) falls back to
+    'unknown' rather than crashing the importing module. Cached: the metadata lookup is done once.
+    """
+    try:
+        return _pkg_version("docker-mcp-server")
+    except Exception:  # noqa: BLE001 — import-time helper must never raise; any failure -> safe fallback
+        return "unknown"
 
 
 def in_container() -> bool:
@@ -59,10 +76,10 @@ def in_container() -> bool:
     True when this server is running inside a container.
 
     Docker writes `/.dockerenv` into every container, and our published images additionally set
-    `DOCKER_MCP_IN_CONTAINER=1`. Either signal flips on the in-container filesystem and
+    `DOCKER_MCP_SERVER_IN_CONTAINER=1`. Either signal flips on the in-container filesystem and
     self-termination guards; on the host install neither is present so those guards are inert.
     """
-    return env_flag(IN_CONTAINER_ENV) or Path("/.dockerenv").exists()
+    return env_flag(IN_CONTAINER_ENV, _LEGACY_IN_CONTAINER_ENV) or Path("/.dockerenv").exists()
 
 
 def _unescape_mountinfo_field(field: str) -> str:
@@ -131,7 +148,7 @@ def _unmapped_path_message(path: Path, *, for_write: bool) -> str:
         verb, consequence = "read from", "no such path is visible inside the container"
     parent = path.parent
     return (
-        f"Cannot {verb} {path}: {consequence}. This docker-mcp server is running in a container, so "
+        f"Cannot {verb} {path}: {consequence}. This docker-mcp-server is running in a container, so "
         f"host paths must be bind-mounted in. Add a mount for the directory to the `docker run` args "
         f"in your MCP client config — e.g. `-v {parent}:{parent}` (using the same path inside and out "
         f"keeps host and container paths identical) — then retry. Small payloads can use the in-band "

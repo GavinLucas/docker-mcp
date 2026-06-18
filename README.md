@@ -1,4 +1,4 @@
-# docker-mcp
+# docker-mcp-server
 
 An [MCP](https://modelcontextprotocol.io) server that lets AI agents manage Docker — containers, images, networks, volumes, swarm services, secrets, configs, nodes, plugins, **Compose projects, CLI contexts, and OCI registries** — by wrapping the official [Docker SDK for Python](https://docker-py.readthedocs.io/en/stable/) and selectively shelling out to the `docker` CLI for features the SDK doesn't expose.
 
@@ -17,7 +17,7 @@ The server is published to [PyPI](https://pypi.org/project/docker-mcp-server/) a
 ```json
 {
   "mcpServers": {
-    "docker-mcp": {
+    "docker-mcp-server": {
       "command": "uvx",
       "args": ["docker-mcp-server"],
       "env": {}
@@ -33,12 +33,12 @@ To pin a specific version, append `==<version>` to the package name (e.g. `docke
 ```json
 {
   "mcpServers": {
-    "docker-mcp": {
+    "docker-mcp-server": {
       "command": "uvx",
       "args": [
         "--from",
         "git+https://github.com/GavinLucas/docker-mcp.git",
-        "docker-mcp"
+        "docker-mcp-server"
       ],
       "env": {}
     }
@@ -59,7 +59,7 @@ linux/arm64) are published on each release to **Docker Hub** (`gavinlucas/docker
 ```json
 {
   "mcpServers": {
-    "docker-mcp": {
+    "docker-mcp-server": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
@@ -91,9 +91,9 @@ plugins.
 | `no-scout` | `:no-scout`, `:<version>-no-scout` | ~315 MB | docker CLI + compose + buildx |
 
 Scout's plugin binary alone accounts for the ~195 MB jump from `no-scout` to `full`. The `no-scout`
-image also defaults `DOCKER_MCP_DISABLE=scout`, so the scout *tools* don't register — the agent is
+image also defaults `DOCKER_MCP_SERVER_DISABLE=scout`, so the scout *tools* don't register — the agent is
 never offered tools whose CLI plugin isn't present (it sees a smaller, fully-working tool list rather
-than scout tools that error on every call). Override at runtime with `-e DOCKER_MCP_DISABLE=...` if you
+than scout tools that error on every call). Override at runtime with `-e DOCKER_MCP_SERVER_DISABLE=...` if you
 ever need to change the disabled set (note it replaces, not appends).
 
 **Building it yourself.** All variants build from the repo's `Dockerfile` via build args:
@@ -131,7 +131,7 @@ path inside and out** keeps host and container paths identical:
 If you call one of these tools with a path that isn't on a bind mount, the server refuses up front
 with a message telling you exactly which `-v` to add — a write to an unmapped path would otherwise be
 silently discarded when the container exits. (The in-band byte tools, capped at 32 MiB, need no
-mount.) Configuration env vars (`DOCKER_MCP_READONLY`, `DOCKER_HOST`, etc.) go in the client's `env`
+mount.) Configuration env vars (`DOCKER_MCP_SERVER_READONLY`, `DOCKER_HOST`, etc.) go in the client's `env`
 block exactly as for the uvx install.
 
 ### Talking to a remote daemon
@@ -255,19 +255,21 @@ Many AI clients let you invoke registered MCP prompts directly (in Claude Code, 
 
 ## Configuration
 
+> **Env var rename (deprecated aliases honored).** The server's environment variables are namespaced `DOCKER_MCP_SERVER_*` to match the published package name. The older `DOCKER_MCP_*` spellings still work as deprecated aliases — the canonical name wins when both are set, and reading via an old name logs a one-time deprecation notice to stderr. Update your config to the `DOCKER_MCP_SERVER_*` names; the aliases may be removed in a future release.
+
 Three environment variables restrict which tools are registered when the server starts. Because they drop tools at registration time, a disabled tool never appears in the client's tool list — this is a server-side guarantee, not a client-side prompt. Set the two boolean switches to `1` / `true` / `yes` / `on`:
 
-- **`DOCKER_MCP_READONLY`** — register only read-only tools (queries, log/data reads, scans). Every tool that changes state is omitted. Use this for monitoring or inspection agents that must not be able to modify anything.
-- **`DOCKER_MCP_NO_DESTRUCTIVE`** — register everything *except* destructive tools (`remove_*`, `prune_*`, `kill_container`, `compose_down`, `leave_swarm`, `context_rm`, `buildx_prune`, `buildx_rm`). A "no data loss" mode that still allows creating and starting resources. `DOCKER_MCP_READONLY` is stricter and wins if both are set.
-- **`DOCKER_MCP_DISABLE`** — a comma-separated list of *domains* (feature areas) to drop wholesale, regardless of category: e.g. `DOCKER_MCP_DISABLE=swarm,services,nodes,configs,secrets` removes the entire swarm surface from a single-host server, and `DOCKER_MCP_DISABLE=scout,buildx` trims build/scan tooling an agent will never use. A domain is a tool module's name — `containers`, `images`, `networks`, `volumes`, `compose`, `stack`, `context`, `buildx`, `scout`, `registry`, `swarm`, `services`, `nodes`, `plugins`, `configs`, `secrets`, `client`. Names are case-insensitive; an unrecognized name is ignored (and surfaced as `unknown_disabled_domains` in the tool catalog, see below). This stacks with the category switches — a tool registers only if its category survives *and* its domain is enabled. Disabling a domain drops more than its tools: the matching workflow **prompts** are skipped (so the agent isn't handed a prompt that drives a feature area this server no longer exposes — e.g. disabling `scout` removes the `audit_image_cves` prompt that would otherwise tell the agent to call a tool that isn't registered) and the matching documentation **resources** are hidden from `docker-docs://contents` (e.g. the `scout` / `scout-cli` sections). The tool catalog's `prompts` list and `disabled_doc_sections` field make both auditable. Trimming domains an agent doesn't need also cuts the tool-list size the client has to reason about, which matters at this server's ~190-tool scale.
+- **`DOCKER_MCP_SERVER_READONLY`** — register only read-only tools (queries, log/data reads, scans). Every tool that changes state is omitted. Use this for monitoring or inspection agents that must not be able to modify anything.
+- **`DOCKER_MCP_SERVER_NO_DESTRUCTIVE`** — register everything *except* destructive tools (`remove_*`, `prune_*`, `kill_container`, `compose_down`, `leave_swarm`, `context_rm`, `buildx_prune`, `buildx_rm`). A "no data loss" mode that still allows creating and starting resources. `DOCKER_MCP_SERVER_READONLY` is stricter and wins if both are set.
+- **`DOCKER_MCP_SERVER_DISABLE`** — a comma-separated list of *domains* (feature areas) to drop wholesale, regardless of category: e.g. `DOCKER_MCP_SERVER_DISABLE=swarm,services,nodes,configs,secrets` removes the entire swarm surface from a single-host server, and `DOCKER_MCP_SERVER_DISABLE=scout,buildx` trims build/scan tooling an agent will never use. A domain is a tool module's name — `containers`, `images`, `networks`, `volumes`, `compose`, `stack`, `context`, `buildx`, `scout`, `registry`, `swarm`, `services`, `nodes`, `plugins`, `configs`, `secrets`, `client`. Names are case-insensitive; an unrecognized name is ignored (and surfaced as `unknown_disabled_domains` in the tool catalog, see below). This stacks with the category switches — a tool registers only if its category survives *and* its domain is enabled. Disabling a domain drops more than its tools: the matching workflow **prompts** are skipped (so the agent isn't handed a prompt that drives a feature area this server no longer exposes — e.g. disabling `scout` removes the `audit_image_cves` prompt that would otherwise tell the agent to call a tool that isn't registered) and the matching documentation **resources** are hidden from `docker-docs://contents` (e.g. the `scout` / `scout-cli` sections). The tool catalog's `prompts` list and `disabled_doc_sections` field make both auditable. Trimming domains an agent doesn't need also cuts the tool-list size the client has to reason about, which matters at this server's ~190-tool scale.
 
 Independently, every registered tool carries [MCP `ToolAnnotations`](https://modelcontextprotocol.io/) — `readOnlyHint` on queries and `destructiveHint` on destructive operations (plus `idempotentHint` on the prune family) — so a client like Claude Code can auto-allow safe reads and gate destructive calls. The classification lives in `TOOL_CATEGORIES` in `docker_mcp/server.py`. To see the full picture at runtime — every tool with its domain, category, and whether the active switches registered it — read the **`docker-mcp://tool-catalog`** MCP resource.
 
-For private registries, the HTTPS-backed `registry_*` tools fall back to **`DOCKER_MCP_REGISTRY_USERNAME`** / **`DOCKER_MCP_REGISTRY_PASSWORD`** from the server's environment when no explicit `username`/`password` arguments are passed (explicit arguments win; the env pair is only used when both arguments are unset). Setting credentials in the environment keeps them out of tool arguments, which many MCP clients log verbatim — the password may be a personal-access token.
+For private registries, the HTTPS-backed `registry_*` tools fall back to **`DOCKER_MCP_SERVER_REGISTRY_USERNAME`** / **`DOCKER_MCP_SERVER_REGISTRY_PASSWORD`** from the server's environment when no explicit `username`/`password` arguments are passed (explicit arguments win; the env pair is only used when both arguments are unset). Setting credentials in the environment keeps them out of tool arguments, which many MCP clients log verbatim — the password may be a personal-access token.
 
 ### Provenance labels
 
-Every Docker object the agent **creates** through this server — containers, networks, volumes, swarm services, configs, and secrets — is stamped with a small set of `docker-mcp-server.*` labels recording that this server made it (`docker-mcp-server.managed=true`), the server version, the originating tool, and a creation timestamp. This lets you (or a cleanup job) later enumerate exactly the footprint the agent created with a single `docker ... --filter label=docker-mcp-server.managed=true`; the `managed_only=True` argument on `list_containers`, `list_networks`, `list_volumes`, and `list_services` is the in-tool shortcut (it combines with any other `filters` you pass). The stamping is additive (a label you pass yourself always wins on a key collision) and uniquely namespaced, so it's safe by default; **`DOCKER_MCP_NO_LABELS=1`** turns it off entirely. Image builds are deliberately **not** stamped, because a build label changes the resulting image digest.
+Every Docker object the agent **creates** through this server — containers, networks, volumes, swarm services, configs, and secrets — is stamped with a small set of `docker-mcp-server.*` labels recording that this server made it (`docker-mcp-server.managed=true`), the server version, the originating tool, and a creation timestamp. This lets you (or a cleanup job) later enumerate exactly the footprint the agent created with a single `docker ... --filter label=docker-mcp-server.managed=true`; the `managed_only=True` argument on `list_containers`, `list_networks`, `list_volumes`, and `list_services` is the in-tool shortcut (it combines with any other `filters` you pass). The stamping is additive (a label you pass yourself always wins on a key collision) and uniquely namespaced, so it's safe by default; **`DOCKER_MCP_SERVER_NO_LABELS=1`** turns it off entirely. Image builds are deliberately **not** stamped, because a build label changes the resulting image digest.
 
 To tear down only what the server created — and nothing else — use the **`prune_managed`** workflow prompt, which scopes every removal step to the `docker-mcp-server.managed=true` label (volumes only when you pass `include_volumes=True`, and only after confirmation).
 
@@ -278,29 +280,29 @@ All of these go in the `env` block of the server entry in your MCP client config
 ```json
 {
   "mcpServers": {
-    "docker-mcp-readonly": {
+    "docker-mcp-server-readonly": {
       "command": "uvx",
       "args": [
         "--from",
         "git+https://github.com/GavinLucas/docker-mcp.git",
-        "docker-mcp"
+        "docker-mcp-server"
       ],
       "env": {
         "DOCKER_HOST": "tcp://staging-host:2376",
         "DOCKER_TLS_VERIFY": "1",
-        "DOCKER_MCP_READONLY": "1"
+        "DOCKER_MCP_SERVER_READONLY": "1"
       }
     }
   }
 }
 ```
 
-Swap `DOCKER_MCP_READONLY` for `DOCKER_MCP_NO_DESTRUCTIVE` to allow create/start/deploy while still making `remove_*` / `prune_*` / `kill_container` impossible. You can also register the same server twice under different names — a full-access entry you enable when needed and a read-only entry for everyday use. With `claude mcp` (Claude Code), the equivalent is:
+Swap `DOCKER_MCP_SERVER_READONLY` for `DOCKER_MCP_SERVER_NO_DESTRUCTIVE` to allow create/start/deploy while still making `remove_*` / `prune_*` / `kill_container` impossible. You can also register the same server twice under different names — a full-access entry you enable when needed and a read-only entry for everyday use. With `claude mcp` (Claude Code), the equivalent is:
 
 ```bash
-claude mcp add docker-mcp-readonly \
-  --env DOCKER_MCP_READONLY=1 \
-  -- uvx --from git+https://github.com/GavinLucas/docker-mcp.git docker-mcp
+claude mcp add docker-mcp-server-readonly \
+  --env DOCKER_MCP_SERVER_READONLY=1 \
+  -- uvx --from git+https://github.com/GavinLucas/docker-mcp.git docker-mcp-server
 ```
 
 ## Security considerations
@@ -308,17 +310,17 @@ claude mcp add docker-mcp-readonly \
 Connecting this server to an AI agent grants it the same level of access as a local Docker CLI session against the configured daemon. That is broad: the daemon's socket is effectively root-equivalent on the host running it. Treat the agent as a privileged user and weigh the risks below before enabling the server.
 
 - **Use a scoped daemon.** Prefer pointing `DOCKER_HOST` at a daemon dedicated to workloads the agent is allowed to touch (a development VM, a remote sandbox, Docker Desktop, a rootless install) rather than your production socket. The daemon is the trust boundary — there is no per-tool authorization layer.
-- **Running as a container.** Mounting `/var/run/docker.sock` into the container grants it the same root-equivalent access to that daemon as the uvx install has — no more, no less, but now explicit in the `docker run` line. The same scoped-daemon advice applies: prefer mounting a socket for, or pointing `DOCKER_HOST` at, a daemon the agent is allowed to control. Note that when containerized the file-path tools read and write *the container's* filesystem, so they can only reach host directories you bind-mount in (see [Run as a container](#run-as-a-container)). As an accident guard, the destructive container-lifecycle tools (`remove_container`, `kill_container`, `stop_container`, `restart_container`, `pause_container`) refuse to act on the server's *own* container so the agent can't end its own session mid-call; this is convenience, not a security boundary (it's bypassable with `DOCKER_MCP_ALLOW_SELF_TERMINATE=1`, and a human can always recover the container from the host shell), and it does not constrain the many other ways a daemon-privileged agent can affect the host.
+- **Running as a container.** Mounting `/var/run/docker.sock` into the container grants it the same root-equivalent access to that daemon as the uvx install has — no more, no less, but now explicit in the `docker run` line. The same scoped-daemon advice applies: prefer mounting a socket for, or pointing `DOCKER_HOST` at, a daemon the agent is allowed to control. Note that when containerized the file-path tools read and write *the container's* filesystem, so they can only reach host directories you bind-mount in (see [Run as a container](#run-as-a-container)). As an accident guard, the destructive container-lifecycle tools (`remove_container`, `kill_container`, `stop_container`, `restart_container`, `pause_container`) refuse to act on the server's *own* container so the agent can't end its own session mid-call; this is convenience, not a security boundary (it's bypassable with `DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE=1`, and a human can always recover the container from the host shell), and it does not constrain the many other ways a daemon-privileged agent can affect the host.
 - **Privileged containers and host mounts.** `run_container` accepts `privileged=True` and arbitrary `volumes`. A privileged container, or one that bind-mounts `/` from the host, can trivially escape to the host filesystem. Avoid letting the agent set these unless you have reviewed the request. Compose files can declare the same — review the rendered `compose_config` output before approving `compose_up` on an unfamiliar project.
 - **Pass-through `extra_kwargs` / `updates` bypass the visible schema.** `run_container`, `create_container`, `create_service` (`extra_kwargs`) and `update_container`, `update_service` (`updates`) forward an arbitrary dict straight into the Docker SDK. A client that gates on, say, `privileged=False` in the tool's declared parameters can still be bypassed via `extra_kwargs={"privileged": True, "pid_mode": "host"}`. These escape hatches are consistent with the "daemon is the trust boundary" model, but any allow/deny policy you build at the MCP-client layer must account for them rather than trusting the named parameters alone.
 - **Registry credentials.** Many MCP clients log tool calls verbatim, so treat any password or `auth_config` you pass through a tool as exposed.
   - **SDK-backed tools** (`login`, `push_image`, `get_registry_data`) accept credentials directly *and* can reuse credentials cached by `docker login` in `~/.docker/config.json`. Prefer running `docker login` once on the host running this MCP server and leaving the credential parameters unset. (Note: this is the host running the server, not the daemon — relevant when `DOCKER_HOST` points at a remote daemon.) A credential passed to `login` is cached in the server's memory for the life of the client; `logout` clears that in-memory cache (all registries, or one) without touching `~/.docker/config.json`, and `close` / `reconnect` clear it by discarding the client. There is no daemon-side session to end — the Engine's `/auth` endpoint only validates.
-  - **HTTPS-backed registry tools** (`registry_list_tags`, `registry_inspect_manifest`, `registry_get_config`, `hub_list_tags`, `hub_repo_info`, `hub_rate_limit`) talk to the registry directly over HTTPS and do NOT read `~/.docker/config.json`. The `registry_*` tools accept `username` / `password` for private registries — or, better, read `DOCKER_MCP_REGISTRY_USERNAME` / `DOCKER_MCP_REGISTRY_PASSWORD` from the server's environment so credentials never transit tool arguments (see [Configuration](#configuration)); the `hub_*` tools currently support public Hub repositories only. If passing credentials as arguments, use a per-invocation token with the minimum required scope rather than a long-lived password. When a registry answers with a `Bearer` auth challenge, the server validates the token `realm` it points at before sending anything: the scheme must be http/https, plaintext http to a non-local host is rejected, and a public registry is not allowed to redirect the credentialed token request at a private/loopback address (an SSRF guard). A genuinely local dev registry (e.g. `localhost:5000`) may still use a local realm.
-- **Swarm secret material transits tool calls too.** Beyond registry credentials, several swarm tools carry secret material through arguments or return values that MCP clients may log: `create_secret(data=...)` and `create_config(data=...)` take the payload as an argument, `get_secret` / `get_config` return the stored object, `join_swarm(join_token=...)` and `unlock_swarm(key=...)` take cluster join/unlock secrets, and `get_swarm_unlock_key`, `get_swarm_join_tokens`, and `rotate_swarm_join_token` *return* cluster credentials — a manager join token lets its holder join the swarm as a manager (root-equivalent on the cluster). Treat all of these as exposed in any client that records tool traffic, and prefer provisioning swarm secrets and reading join tokens out-of-band on the host rather than through the agent. If an agent never needs to admit nodes, drop the whole surface with `DOCKER_MCP_DISABLE=swarm` (see [Configuration](#configuration)).
+  - **HTTPS-backed registry tools** (`registry_list_tags`, `registry_inspect_manifest`, `registry_get_config`, `hub_list_tags`, `hub_repo_info`, `hub_rate_limit`) talk to the registry directly over HTTPS and do NOT read `~/.docker/config.json`. The `registry_*` tools accept `username` / `password` for private registries — or, better, read `DOCKER_MCP_SERVER_REGISTRY_USERNAME` / `DOCKER_MCP_SERVER_REGISTRY_PASSWORD` from the server's environment so credentials never transit tool arguments (see [Configuration](#configuration)); the `hub_*` tools currently support public Hub repositories only. If passing credentials as arguments, use a per-invocation token with the minimum required scope rather than a long-lived password. When a registry answers with a `Bearer` auth challenge, the server validates the token `realm` it points at before sending anything: the scheme must be http/https, plaintext http to a non-local host is rejected, and a public registry is not allowed to redirect the credentialed token request at a private/loopback address (an SSRF guard). A genuinely local dev registry (e.g. `localhost:5000`) may still use a local realm.
+- **Swarm secret material transits tool calls too.** Beyond registry credentials, several swarm tools carry secret material through arguments or return values that MCP clients may log: `create_secret(data=...)` and `create_config(data=...)` take the payload as an argument, `get_secret` / `get_config` return the stored object, `join_swarm(join_token=...)` and `unlock_swarm(key=...)` take cluster join/unlock secrets, and `get_swarm_unlock_key`, `get_swarm_join_tokens`, and `rotate_swarm_join_token` *return* cluster credentials — a manager join token lets its holder join the swarm as a manager (root-equivalent on the cluster). Treat all of these as exposed in any client that records tool traffic, and prefer provisioning swarm secrets and reading join tokens out-of-band on the host rather than through the agent. If an agent never needs to admit nodes, drop the whole surface with `DOCKER_MCP_SERVER_DISABLE=swarm` (see [Configuration](#configuration)).
 - **`exec_in_container`, `compose_exec`, and `compose_run` run arbitrary commands.** When any part of the command is derived from agent-controlled input, use an exec-form argv list that does not invoke a shell (e.g. `["python", "-V"]`). A list like `["sh", "-c", template]` that invokes a shell will interpret shell metacharacters in the untrusted substrings.
 - **Container archive paths.** `get_container_archive` and `put_container_archive` forward the supplied path verbatim to the daemon. The container is the trust boundary — if you do not trust its filesystem, do not assume `..` traversal will be rejected.
-- **File-path payload tools read and write the server host's filesystem.** `save_image_to_file`, `export_container_to_file`, and `get_container_archive_to_file` write to a `dest_path` on the host running this MCP server (refusing to overwrite an existing file unless `overwrite=True`); `load_image_from_file` and `put_container_archive_from_file` read a host path; `compose_cp` copies between a service container and a host path in either direction. These run as the server's user, so the agent can write any file that user can write and read any file it can read. Prefer the in-band byte tools (capped at 32 MiB) when you don't trust the agent with host filesystem access. `DOCKER_MCP_READONLY` also drops the host-writing variants — but note it is not targeted at them: it registers *only* read-only tools, so `load_image_from_file` and `put_container_archive_from_file` (and every other mutating/destructive tool) go too. There is no switch that drops just the file-writers.
-- **Destructive operations have no built-in confirmation.** `prune_*`, `remove_*`, `kill_container`, `leave_swarm`, `compose_down(volumes=True)`, `compose_kill`, `stack_rm` (tears down every service in a stack), `buildx_prune` (always runs with `--force`), and `buildx_rm` execute immediately. These tools carry the `destructiveHint` annotation, so a client like Claude Code can gate them, and the shipped `clean_environment` prompt asks the agent to confirm before pruning volumes — but tool calls themselves are not gated by the server. For a hard guarantee, run with `DOCKER_MCP_NO_DESTRUCTIVE=1` (drops them entirely) or `DOCKER_MCP_READONLY=1` (see [Configuration](#configuration)); for an approval step, configure it at the MCP client.
+- **File-path payload tools read and write the server host's filesystem.** `save_image_to_file`, `export_container_to_file`, and `get_container_archive_to_file` write to a `dest_path` on the host running this MCP server (refusing to overwrite an existing file unless `overwrite=True`); `load_image_from_file` and `put_container_archive_from_file` read a host path; `compose_cp` copies between a service container and a host path in either direction. These run as the server's user, so the agent can write any file that user can write and read any file it can read. Prefer the in-band byte tools (capped at 32 MiB) when you don't trust the agent with host filesystem access. `DOCKER_MCP_SERVER_READONLY` also drops the host-writing variants — but note it is not targeted at them: it registers *only* read-only tools, so `load_image_from_file` and `put_container_archive_from_file` (and every other mutating/destructive tool) go too. There is no switch that drops just the file-writers.
+- **Destructive operations have no built-in confirmation.** `prune_*`, `remove_*`, `kill_container`, `leave_swarm`, `compose_down(volumes=True)`, `compose_kill`, `stack_rm` (tears down every service in a stack), `buildx_prune` (always runs with `--force`), and `buildx_rm` execute immediately. These tools carry the `destructiveHint` annotation, so a client like Claude Code can gate them, and the shipped `clean_environment` prompt asks the agent to confirm before pruning volumes — but tool calls themselves are not gated by the server. For a hard guarantee, run with `DOCKER_MCP_SERVER_NO_DESTRUCTIVE=1` (drops them entirely) or `DOCKER_MCP_SERVER_READONLY=1` (see [Configuration](#configuration)); for an approval step, configure it at the MCP client.
 - **CLI shell-out attack surface.** Compose, Context, Buildx, and Scout tools spawn `docker` subprocesses on the host running this MCP server. Every invocation passes arguments as a list (no shell, no metacharacter interpretation), resolves the binary via `shutil.which`, and runs against a scrubbed environment (DOCKER_HOST and related vars only). Positional values (image refs, service / context / builder names, build contexts) are additionally rejected if they start with `-`, so an argument can't be smuggled in as a CLI flag (e.g. a service named `--output=…`); the one deliberate exception is the trailing command in `compose_exec` / `compose_run`, which is meant to be an arbitrary argv. Filesystem paths supplied to `compose_*` (project_dir, files) are read by the docker CLI on the server host — passing an unfamiliar path can expose any compose file the server's user can read.
 - **Docker Context retargeting.** `context_use` only changes the CLI default for subsequent CLI-backed tools. SDK-backed tools (`list_containers`, `pull_image`, etc.) keep using whatever daemon the docker-py client connected to when it was first created (lazily, on the first SDK-backed tool call). Restart the server with a different `DOCKER_HOST` / `DOCKER_CONTEXT`, or call `reconnect` (see below), to retarget those. `context_create(skip_tls_verify=True)` disables TLS verification for a context; use only against trusted local daemons.
 - **`reconnect` retargets the trust boundary at runtime.** `reconnect(docker_host=...)` rebuilds the shared SDK client and points it at a different daemon without a server restart — which moves the root-equivalent trust boundary to whatever endpoint is passed. Only allow it against daemons the agent is authorized to control. The `docker_host` argument is logged like any tool call, and an `ssh://` target authenticates via the server host's SSH agent / `known_hosts`. The new endpoint is validated before the previous client is replaced, so a bad target leaves the working client in place.
@@ -383,7 +385,7 @@ def mcp_example(name: str):
 ```
 
 - Import `tool` from `docker_mcp.server` (and, for prompts/resources, `mcp`), never directly from the `mcp` package — that creates a circular import.
-- Every tool needs a `TOOL_CATEGORIES` entry in `docker_mcp/server.py` (`READ_ONLY` / `MUTATING` / `DESTRUCTIVE`); the central map drives the tool's `ToolAnnotations` and the read-only env switches, and `tests/test_server.py` fails if it drifts from the registered set. A tool's *domain* (for `DOCKER_MCP_DISABLE` and the tool catalog) is derived automatically from its module name, so putting a tool in the right `docker_mcp/tools/<domain>.py` file is all that's needed.
+- Every tool needs a `TOOL_CATEGORIES` entry in `docker_mcp/server.py` (`READ_ONLY` / `MUTATING` / `DESTRUCTIVE`); the central map drives the tool's `ToolAnnotations` and the read-only env switches, and `tests/test_server.py` fails if it drifts from the registered set. A tool's *domain* (for `DOCKER_MCP_SERVER_DISABLE` and the tool catalog) is derived automatically from its module name, so putting a tool in the right `docker_mcp/tools/<domain>.py` file is all that's needed.
 - Line length is 120 characters (enforced by ruff).
 - CLI shell-outs must go through `docker_mcp/tools/_cli.py:run_docker` — never call `subprocess.run` directly from a tool module. The helper enforces `shell=False`, resolves the binary via `shutil.which` (cross-platform), decodes output as UTF-8 with replace, caps the captured bytes, scrubs the environment, and suppresses console pop-ups on Windows.
 

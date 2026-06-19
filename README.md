@@ -346,7 +346,7 @@ Connecting this server to an AI agent grants it the same level of access as a lo
 
 docker-mcp-server collects no data, sends no telemetry, and has no author-operated backend. It runs
 locally and talks only to the Docker daemon and container registries **you** point it at, as part of
-the operations you request. The full statement is in [PRIVACY.md](PRIVACY.md).
+the operations you request. The full statement is in [PRIVACY.md](https://github.com/GavinLucas/docker-mcp/blob/main/PRIVACY.md).
 
 ## Contributing
 

@@ -81,7 +81,7 @@ A third distribution channel for one-click install in Claude Desktop. Repo-root 
 - Tool functions are decorated with `@tool()` (imported from `docker_mcp.server`) and **must have a `TOOL_CATEGORIES` entry** in `docker_mcp/server.py`. A new tool module is a new domain — also add a `_DOMAIN_BLURBS` entry so the `instructions` router advertises it.
 - Line length limit: 120 characters.
 - Do not add comments that describe what the code does — only add comments for non-obvious constraints or workarounds.
-- **Target runtime is Python >=3.14** — when reviewing, assume current stable CPython grammar and stdlib are available and valid. For example, [PEP 758](https://peps.python.org/pep-0758/) makes parentheses optional in `except` / `except*` clauses, so `except OSError, ValueError:` is a valid two-exception handler (not a `SyntaxError`), and `ruff` (pyupgrade, 3.14 target) may even rewrite to that form. Do not flag 3.14-valid syntax as a bug.
+- **Target runtime is Python >=3.14** — when reviewing, assume current stable CPython grammar and stdlib are available and valid; do not flag 3.14-valid syntax as a bug. A concrete example reviewers (and older models) get wrong: [PEP 758](https://peps.python.org/pep-0758/) — **Status: Final, Python-Version: 3.14** — makes parentheses optional in `except` / `except*` clauses, so `except OSError, ValueError:` is a valid two-exception handler, **not** a `SyntaxError` (verifiable: `python3.14 -c "import ast; ast.parse('try:\n pass\nexcept OSError, ValueError:\n pass')"` parses it as a tuple handler). The `as`-binding form still requires parens (`except (OSError, ValueError) as e:`), and `ruff` (pyupgrade, 3.14 target) may rewrite to the unparenthesized form.
 
 ### Provenance labels
 

@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "docker-mcp-server",
   "display_name": "Docker MCP Server",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Manage Docker through the Docker SDK for Python and the docker CLI: containers, images, networks, volumes, Compose, Swarm, Buildx, Scout, and OCI registries, exposed as MCP tools.",
   "long_description": "Exposes the Docker SDK for Python and the docker CLI (Compose, Buildx, Scout, Context, Stack) as MCP tools so an agent can manage local or remote Docker daemons. Connects over the local socket, a TCP endpoint, or `ssh://` (pure-Python paramiko transport, no system ssh binary). Read-only / no-destructive / disabled-domain switches are exposed below so you can register a restricted tool surface. The server runs entirely on your machine and sends no telemetry — see the Privacy Policy.",
   "author": {

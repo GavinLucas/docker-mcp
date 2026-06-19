@@ -118,7 +118,7 @@ jobs:
               echo "$out"; echo "Published to the MCP Registry."; exit 0
             fi
             echo "$out"
-            if printf '%s\n' "$out" | grep -qiE 'does not exist|not found|no such|status (429|5[0-9][0-9])'; then
+            if printf '%s\n' "$out" | grep -qiE 'does not exist|not found|no such|status (404|429|5[0-9][0-9])'; then
               echo "::notice::a verified artifact isn't live yet (attempt $i/$attempts) — waiting 60s for propagation"
               sleep 60; continue
             fi

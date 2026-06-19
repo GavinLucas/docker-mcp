@@ -120,7 +120,7 @@ def _active_context_name() -> str | None:
         return name
     try:
         cfg = json.loads((_docker_config_dir() / "config.json").read_text(encoding="utf-8"))
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return None
     return (cfg.get("currentContext") or "").strip() or None
 
@@ -131,7 +131,7 @@ def _context_host(name: str) -> str | None:
     meta_path = _docker_config_dir() / "contexts" / "meta" / digest / "meta.json"
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return None
     host = (((meta.get("Endpoints") or {}).get("docker") or {}).get("Host") or "").strip()
     return host or None
@@ -383,7 +383,9 @@ def reconnect(docker_host: str | None = None) -> dict:
     returns: dict - The new daemon's version info (same shape as `version`), confirming connectivity
     """
     global _client
-    target = docker_host or os.environ.get("DOCKER_HOST", "the default Docker socket")
+    # Name the endpoint we'll actually use, mirroring _build_default_client's precedence so a failure
+    # message points at the real target (context/socket resolution, not a misleading default).
+    target = docker_host or os.environ.get("DOCKER_HOST") or _resolve_default_base_url() or "the default Docker socket"
     try:
         new_client = docker.DockerClient(base_url=docker_host) if docker_host else _build_default_client()
     except _CONNECT_ERRORS as exc:

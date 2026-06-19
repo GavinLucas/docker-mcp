@@ -2,7 +2,7 @@
 
 # docker-mcp-server
 
-<!-- mcp-name: io.github.gavinlucas/docker-mcp-server -->
+<!-- mcp-name: io.github.GavinLucas/docker-mcp-server -->
 
 An [MCP](https://modelcontextprotocol.io) server that lets AI agents manage Docker — containers, images, networks, volumes, swarm services, secrets, configs, nodes, plugins, **Compose projects, CLI contexts, and OCI registries** — by wrapping the official [Docker SDK for Python](https://docker-py.readthedocs.io/en/stable/) and selectively shelling out to the `docker` CLI for features the SDK doesn't expose.
 

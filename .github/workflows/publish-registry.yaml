@@ -5,14 +5,14 @@ name: 'Publish to MCP Registry'
 # workflows publish — so this is a thin, late step layered on top of them.
 #
 # Ownership verification: the registry checks that we own each package listed in server.json, via a
-# marker that must equal server.json's `name` (io.github.gavinlucas/docker-mcp-server):
+# marker that must equal server.json's `name` (io.github.GavinLucas/docker-mcp-server):
 #   - pypi  -> the `<!-- mcp-name: ... -->` comment in README.md (PyPI long-description)
 #   - oci   -> the io.modelcontextprotocol.server.name image label (set in publish-images.yaml)
 #   - mcpb  -> the .mcpb release-asset URL (must contain "mcp") + a matching fileSha256
 # All three markers therefore have to be live in the SAME release for a publish to succeed, so this
 # workflow can only go green once the PyPI, image, and .mcpb publish workflows have all shipped that
 # release's artifacts. Authentication is GitHub OIDC (no stored secret) — the id-token permission
-# lets mcp-publisher prove the io.github.gavinlucas namespace from the workflow's OIDC token.
+# lets mcp-publisher prove the io.github.GavinLucas namespace from the workflow's OIDC token.
 #
 # Because the sibling publish workflows run in parallel on the same release event, this one races
 # them; the download and publish steps retry to absorb registry/PyPI/GHCR propagation lag. If it still

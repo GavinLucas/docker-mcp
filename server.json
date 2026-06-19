@@ -1,28 +1,28 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.gavinlucas/docker-mcp-server",
+  "name": "io.github.GavinLucas/docker-mcp-server",
   "title": "Docker MCP Server",
   "description": "Manage Docker (containers, images, Compose, Swarm, registries) via the Docker SDK and CLI.",
   "repository": {
     "url": "https://github.com/GavinLucas/docker-mcp",
     "source": "github"
   },
-  "version": "1.8.0",
+  "version": "1.8.1",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "docker-mcp-server",
-      "version": "1.8.0",
+      "version": "1.8.1",
       "transport": { "type": "stdio" }
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/gavinlucas/docker-mcp-server:1.8.0",
+      "identifier": "ghcr.io/gavinlucas/docker-mcp-server:1.8.1",
       "transport": { "type": "stdio" }
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/GavinLucas/docker-mcp/releases/download/v1.8.0/docker-mcp-server-1.8.0.mcpb",
+      "identifier": "https://github.com/GavinLucas/docker-mcp/releases/download/v1.8.1/docker-mcp-server-1.8.1.mcpb",
       "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "transport": { "type": "stdio" }
     }

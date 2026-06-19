@@ -112,7 +112,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/GavinLucas/docker-mcp
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
-            io.modelcontextprotocol.server.name=io.github.gavinlucas/docker-mcp-server
+            io.modelcontextprotocol.server.name=io.github.GavinLucas/docker-mcp-server
           build-args: |
             INSTALL_CLI=${{ matrix.install_cli }}
             INSTALL_SCOUT=${{ matrix.install_scout }}

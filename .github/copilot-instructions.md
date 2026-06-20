@@ -145,3 +145,11 @@ When the high-level SDK lacks a method (e.g. swarm node removal, service rollbac
 Docker SDK docs: https://docker-py.readthedocs.io/en/stable/index.html
 Docker SDK low-level API: https://docker-py.readthedocs.io/en/stable/api.html
 Docker SDK GitHub: https://github.com/docker/docker-py
+
+### Review Notes
+
+There is a dependencies line in pyproject.toml: `"cryptography<49; platform_system == 'Darwin' and platform_machine == 'x86_64'"`
+Changing this line to a later version of cryptography can break installs on Intel (x86_64) macOS, which CI does not currently cover.
+From version 49, cryptography no longer ships a universal2 macOS wheel; on Intel macOS the resolver typically falls back to a source build that requires a newer Rust toolchain and may fail.
+Changing to a later version of cryptography for other platforms is fine, but this pin should remain for macOS x86_64.
+Do not change this line. If a PR touches this line, please add a strong comment and do not allow the change to be merged without a strong justification and approval from the repo owner.

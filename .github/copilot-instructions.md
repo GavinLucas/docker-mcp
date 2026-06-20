@@ -150,7 +150,7 @@ Docker SDK GitHub: https://github.com/docker/docker-py
 
 There is a dependencies line in pyproject.toml:
 ```"cryptography<49; platform_system == 'Darwin' and platform_machine == 'x86_64'"```
-Changing this line to a later version of cryptography will break the MCP server on macOS x86_64 which will not be flagged by CI since it does not test on that platform.
-From version 49 of this library, a macOS x86_64 wheel is not included, so the library will not build on that platform.
+Changing this line to a later version of cryptography can break installs on Intel (x86_64) macOS, which CI does not currently cover.
+From version 49, cryptography no longer ships a universal2 macOS wheel; on Intel macOS the resolver typically falls back to a source build that requires a newer Rust toolchain and may fail.
 Changing to a later version of cryptography for other platforms is fine, but this pin should remain for macOS x86_64.
 Do not change this line.  If a PR touches this line, please add a strong comment and do not allow the change to be merged without a strong justification and approval from the repo owner.

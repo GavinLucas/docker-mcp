@@ -153,4 +153,4 @@ There is a dependencies line in pyproject.toml:
 Changing this line to a later version of cryptography can break installs on Intel (x86_64) macOS, which CI does not currently cover.
 From version 49, cryptography no longer ships a universal2 macOS wheel; on Intel macOS the resolver typically falls back to a source build that requires a newer Rust toolchain and may fail.
 Changing to a later version of cryptography for other platforms is fine, but this pin should remain for macOS x86_64.
-Do not change this line.  If a PR touches this line, please add a strong comment and do not allow the change to be merged without a strong justification and approval from the repo owner.
+Do not change this line. If a PR touches this line, please add a strong comment and do not allow the change to be merged without a strong justification and approval from the repo owner.

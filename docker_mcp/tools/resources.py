@@ -235,10 +235,10 @@ def list_container_resources() -> str:
 
 def list_host_container_resources(host: str) -> str:
     """
-    Index every container on a named host (host-qualified variant of docker://containers).
+    Index every container on a named host (the host-qualified container index).
 
-    Same shape as the default index, but the child logs/stats URIs stay on `host` so following them
-    reads the same daemon.
+    Same shape as the default container index, but the child logs/stats URIs stay on `host` so
+    following them reads the same daemon.
 
     args: host - Configured host label (from the docker-mcp://hosts resource)
     returns: str - JSON object {"containers": [...]}
@@ -253,7 +253,7 @@ def get_container_logs_resource(id_or_name: str) -> str:
     Works on running and stopped containers, so it can surface why a container exited. The read is
     capped to a recent tail so it can't flood the agent's context.
 
-    args: id_or_name - The container id or name (from the docker://containers index)
+    args: id_or_name - The container id or name (from the container index)
     returns: str - The decoded recent log tail
     """
     _require_containers_domain()
@@ -280,7 +280,7 @@ def get_container_stats_resource(id_or_name: str) -> str:
     Returns a small summary (CPU %, memory used/limit/%, network and block I/O) derived from a single
     stats snapshot. Raises if the container isn't running, since stats require a live cgroup.
 
-    args: id_or_name - The container id or name (from the docker://containers index)
+    args: id_or_name - The container id or name (from the container index)
     returns: str - JSON {container, cpu_percent, mem_used_mb, mem_limit_mb, mem_percent,
                    net_rx_mb, net_tx_mb, blk_read_mb, blk_write_mb}
     """

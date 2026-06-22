@@ -21,9 +21,11 @@ from typing import NoReturn
 
 from docker_mcp._env import read_env, scrub_unresolved_env
 
-# Internal label for the single synthesized host (unset var / bare-shorthand). Never surfaced in
-# single-host mode (no `host` param, no enum) and unreachable in multi-host mode (which always uses
-# explicit user labels), so it cannot collide with a user-chosen label or be passed as a target.
+# Internal label for the single synthesized host built when DOCKER_MCP_SERVER_HOSTS is unset or a bare
+# single endpoint. It only exists in single-host mode, where labels are never surfaced (no `host`
+# param, no enum), so it is never offered as a selectable target. A multi-host list never synthesizes
+# it; a user MAY label one of their hosts "default" there, which is an ordinary label — conceptually
+# separate from this internal fallback, and resolvable like any other (a deliberate design choice).
 _DEFAULT_LABEL = "default"
 
 _VALID_LABEL = re.compile(r"[A-Za-z0-9_.-]+")
@@ -259,7 +261,9 @@ def load() -> None:
     global _registry
     scrub_unresolved_env()
     raw = read_env("DOCKER_MCP_SERVER_HOSTS")
-    if raw and (os.environ.get("DOCKER_HOST") or "").strip():
+    # Warn only when HOSTS actually takes effect — a whitespace-only value parses as unset (DOCKER_HOST
+    # is then honored, not ignored), so it must not trigger the notice.
+    if (raw or "").strip() and (os.environ.get("DOCKER_HOST") or "").strip():
         _notify_docker_host_ignored()
     try:
         _registry = parse_registry(raw)

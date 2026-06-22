@@ -210,6 +210,15 @@ def test_load_ignores_docker_host_and_warns_when_hosts_set(monkeypatch, stub_res
     assert "ignoring DOCKER_HOST" in capsys.readouterr().err
 
 
+def test_load_whitespace_hosts_honors_docker_host_without_warning(monkeypatch, capsys):
+    # A whitespace-only HOSTS value parses as unset, so DOCKER_HOST is honored — no "ignoring" notice.
+    monkeypatch.setenv("DOCKER_MCP_SERVER_HOSTS", "   ")
+    monkeypatch.setenv("DOCKER_HOST", "tcp://10.0.0.5:2375")
+    hosts.load()
+    assert hosts._registry["default"].url == "tcp://10.0.0.5:2375"
+    assert "ignoring DOCKER_HOST" not in capsys.readouterr().err
+
+
 def test_load_fail_fast_exits_nonzero(monkeypatch):
     monkeypatch.setenv("DOCKER_MCP_SERVER_HOSTS", "a=auto, a=local")
     with pytest.raises(SystemExit) as exc:

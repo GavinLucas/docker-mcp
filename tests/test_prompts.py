@@ -394,6 +394,8 @@ def test_monitor_fleet_host_note_only_in_multi_host(monkeypatch):
     _set_multi(monkeypatch)
     multi = monitor_container_fleet()
     assert "Multi-host" in multi and "host=<name>" in multi
+    # The note must correct the single-host URIs the body uses to the empty-authority / host forms.
+    assert "docker:///containers" in multi and "docker://{host}/containers" in multi
 
 
 def test_triage_incident_host_note_only_in_multi_host(monkeypatch):

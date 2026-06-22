@@ -5,12 +5,21 @@ from docker_mcp.server import prompt
 
 
 def _host_targeting_note() -> str:
-    """A trailing line (multi-host only) telling the agent how to point a sweep at a specific host."""
+    """A trailing block (multi-host only) correcting the resource URIs and explaining host targeting.
+
+    The prompt bodies use the single-host `docker://containers` / `docker-…://{name}` forms, which are
+    NOT registered in multi-host mode (the index becomes empty-authority/host-qualified), so this note
+    redirects the agent to the right forms and to the URIs the index already carries per entry.
+    """
     if not _hosts.is_multi():
         return ""
     return (
-        "\nMulti-host: this targets the default host. To work a different one, pass `host=<name>` to the "
-        "tools and read `docker://{host}/containers` for that host's index (see `docker-mcp://hosts`)."
+        "\nMulti-host: the bare `docker://containers` / `docker-logs://{name}` / `docker-stats://{name}` "
+        "forms above are single-host only. Here the container index is `docker:///containers` for the "
+        "default host or `docker://{host}/containers` for a named one; pass `host=<name>` to the tools. "
+        "Don't build `docker-logs`/`docker-stats` URIs yourself — follow the `logs`/`stats` URIs each "
+        "index entry carries, which are already in the correct (empty-authority or host-qualified) form. "
+        "See `docker-mcp://hosts` for the configured hosts."
     )
 
 

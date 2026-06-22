@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+import docker_mcp  # noqa: F401 — side-effect import: docker_mcp/__init__ runs _hosts.load() to pin the registry
 from docker_mcp.server import TOOL_CATEGORIES
 from docker_mcp.tools.resources import (
     DOCKER_DOCS_BASE_URL,

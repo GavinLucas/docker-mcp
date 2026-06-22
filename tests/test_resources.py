@@ -12,6 +12,7 @@ from docker_mcp.tools.resources import (
     get_container_logs_resource,
     get_container_stats_resource,
     get_docs_section,
+    get_hosts_resource,
     get_tool_catalog,
     list_container_resources,
     list_docs_sections,
@@ -83,6 +84,14 @@ def test_get_tool_catalog_returns_json_covering_every_tool():
     assert {t["name"] for t in payload["tools"]} == set(TOOL_CATEGORIES)
     assert "DOCKER_MCP_SERVER_DISABLE" in payload["switches"]
     assert payload["domains"]  # per-domain summary is populated
+
+
+def test_get_hosts_resource_returns_the_configured_hosts():
+    # Default test env (no DOCKER_MCP_SERVER_HOSTS) -> a single synthesized default host.
+    payload = json.loads(get_hosts_resource())
+    assert isinstance(payload, list) and len(payload) == 1
+    assert payload[0]["default"] is True
+    assert set(payload[0]) == {"name", "url", "read_only", "tls", "default"}
 
 
 # ---------- DOCKER_MCP_SERVER_DISABLE also hides a disabled domain's doc sections ----------

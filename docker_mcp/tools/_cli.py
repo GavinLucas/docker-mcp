@@ -131,10 +131,14 @@ def _apply_host_env(env: dict[str, str], host: str | None) -> None:
     resolved = _resolve_host(host)
     if not _is_multi() and not (os.environ.get("DOCKER_MCP_SERVER_HOSTS") or "").strip():
         return  # legacy single host: inherit the ambient docker env (unchanged behavior)
-    if resolved.url is None:
-        return  # platform default: let the CLI find it
-    env["DOCKER_HOST"] = resolved.url
+    # Explicit host: pin to this host's endpoint and never inherit the ambient DOCKER_HOST / DOCKER_CONTEXT
+    # (DOCKER_HOST is ignored when DOCKER_MCP_SERVER_HOSTS is set). A host that resolved to the platform
+    # default (url=None) drops them so the CLI finds its own default socket/npipe.
     env.pop("DOCKER_CONTEXT", None)
+    if resolved.url is None:
+        env.pop("DOCKER_HOST", None)
+    else:
+        env["DOCKER_HOST"] = resolved.url
     if resolved.cert_dir:
         env["DOCKER_CERT_PATH"] = resolved.cert_dir
         env["DOCKER_TLS_VERIFY"] = "1"

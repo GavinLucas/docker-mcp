@@ -495,3 +495,19 @@ def test_guard_not_self_enforced_on_the_self_host(monkeypatch):
     monkeypatch.setattr(client_module, "_self_host_label", "local")
     with pytest.raises(RuntimeError, match="own container"):
         client_module.guard_not_self(_fake_container("self-full-id", name="mcp"), host="local")
+
+
+def test_build_client_platform_default_ignores_ambient_docker_host(monkeypatch):
+    # An explicit host (HOSTS set) that resolved to url=None must use the platform default, NOT read
+    # the ambient DOCKER_HOST (which is ignored in multi-host mode) via from_env.
+    _set_multi(monkeypatch)
+    monkeypatch.setenv("DOCKER_HOST", "tcp://ambient:2375")
+    monkeypatch.delenv("DOCKER_TLS_VERIFY", raising=False)
+    sentinel = MagicMock()
+    with (
+        patch("docker_mcp.tools.client.docker.DockerClient", return_value=sentinel) as ctor,
+        patch("docker_mcp.tools.client.docker.from_env") as from_env,
+    ):
+        assert client_module._build_client(Host("local", None)) is sentinel
+    ctor.assert_called_once_with()  # no base_url -> platform socket/npipe; ambient DOCKER_HOST ignored
+    from_env.assert_not_called()

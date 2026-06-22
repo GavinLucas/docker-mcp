@@ -6,7 +6,7 @@ import pytest
 
 import docker_mcp._hosts as _hosts_mod
 import docker_mcp.tools._cli as cli_module
-from docker_mcp._hosts import parse_registry
+from docker_mcp._hosts import Host, parse_registry
 from docker_mcp.tools._cli import (
     MAX_CLI_OUTPUT_BYTES,
     CliResult,
@@ -481,3 +481,14 @@ def test_apply_host_env_strips_inherited_tls_for_plaintext_host(monkeypatch):
     cli_module._apply_host_env(env, "prod")
     assert "DOCKER_CERT_PATH" not in env
     assert "DOCKER_TLS_VERIFY" not in env
+
+
+def test_apply_host_env_platform_default_strips_ambient(monkeypatch):
+    # An explicit host resolving to url=None must drop the ambient DOCKER_HOST/DOCKER_CONTEXT so the
+    # child CLI uses the platform default rather than being retargeted by ambient settings.
+    monkeypatch.delenv("DOCKER_TLS_VERIFY", raising=False)
+    monkeypatch.setattr(_hosts_mod, "_registry", {"box": Host("box", None), "prod": Host("prod", "tcp://prod:2376")})
+    env = {"DOCKER_HOST": "tcp://ambient", "DOCKER_CONTEXT": "ctx"}
+    cli_module._apply_host_env(env, "box")
+    assert "DOCKER_HOST" not in env
+    assert "DOCKER_CONTEXT" not in env

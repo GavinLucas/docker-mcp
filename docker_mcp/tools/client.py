@@ -153,11 +153,16 @@ def _build_client(host: Host) -> docker.DockerClient:
 
     The legacy single host (DOCKER_MCP_SERVER_HOSTS unset) goes through _build_default_client so the
     existing DOCKER_HOST / from_env behavior (and its TLS env / API-version negotiation) is preserved
-    exactly. An explicitly-configured host is built from its resolved URL with per-host TLS.
+    exactly — this is the ONLY path that reads DOCKER_HOST. An explicitly-configured host is built from
+    its resolved URL with per-host TLS; one that resolved to the platform default (url=None, e.g. `local`
+    on Windows) is built WITHOUT a base_url so it uses the platform socket/npipe and never re-reads the
+    ambient DOCKER_HOST (which is ignored when DOCKER_MCP_SERVER_HOSTS is set).
     """
-    if host.url is None or (not _is_multi() and not (os.environ.get("DOCKER_MCP_SERVER_HOSTS") or "").strip()):
+    if not _is_multi() and not (os.environ.get("DOCKER_MCP_SERVER_HOSTS") or "").strip():
         return _build_default_client()
     tls = _tls_config_for(host)
+    if host.url is None:
+        return docker.DockerClient(tls=tls) if tls is not None else docker.DockerClient()
     return (
         docker.DockerClient(base_url=host.url, tls=tls) if tls is not None else docker.DockerClient(base_url=host.url)
     )

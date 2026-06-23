@@ -4,7 +4,7 @@ More than just a fully featured [MCP](https://modelcontextprotocol.io) server th
 
 It can manage multiple Docker daemons, e.g. both your local dev environment and also a remote production environment over TCP, TLS or SSH in a single session. It can also be configured to mark some daemons as read-only, so that you can monitor them without the risk of making accidental changes. It also exposes things like logs and stats as resources so that you can easily monitor and triage your environments with a few prompts.
 
-The server runs entirely on your machine and sends no telemetry. You are entirely in control — see the [Privacy Policy](#privacy-policy).
+The server runs entirely on your machine and sends no telemetry. You are entirely in control — see the [Privacy Policy](https://github.com/GavinLucas/docker-mcp#privacy-policy).
 
 This image is the container distribution of the project. **Full documentation, configuration, and source are on GitHub: <https://github.com/GavinLucas/docker-mcp>.**
 

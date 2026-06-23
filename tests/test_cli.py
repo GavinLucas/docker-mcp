@@ -232,6 +232,22 @@ def test_run_docker_extra_env_overlays_allowlist(monkeypatch):
     assert env["COMPOSE_PROJECT_NAME"] == "demo"
 
 
+def test_run_docker_extra_env_tls_survives_apply_host_env(monkeypatch):
+    # extra_env is applied after _apply_host_env, so caller-provided TLS vars must not be stripped
+    # even when the host has no (tls=) marker and DOCKER_TLS_VERIFY is absent from os.environ.
+    monkeypatch.delenv("DOCKER_TLS_VERIFY", raising=False)
+    monkeypatch.delenv("DOCKER_MCP_SERVER_HOSTS", raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    with (
+        patch("docker_mcp.tools._cli.shutil.which", return_value="/usr/bin/docker"),
+        patch("docker_mcp.tools._cli.subprocess.run", return_value=_fake_completed()) as run,
+    ):
+        run_docker(["version"], extra_env={"DOCKER_TLS_VERIFY": "1", "DOCKER_CERT_PATH": "/certs"})
+    env = run.call_args.kwargs["env"]
+    assert env["DOCKER_TLS_VERIFY"] == "1"
+    assert env["DOCKER_CERT_PATH"] == "/certs"
+
+
 def test_run_docker_windows_sets_create_no_window():
     fake_flag = 0x08000000  # actual value of CREATE_NO_WINDOW; arbitrary for the test
     with (

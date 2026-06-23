@@ -181,9 +181,9 @@ def run_docker(
     binary = _resolve("docker")
     cmd = [binary, *args]
     env = _safe_env()
+    _apply_host_env(env, host)
     if extra_env:
         env.update(extra_env)
-    _apply_host_env(env, host)
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
     with contextlib.ExitStack() as stack:
         if env.get("DOCKER_HOST", "").startswith("ssh://"):

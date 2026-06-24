@@ -412,8 +412,11 @@ Contributions are welcome. The project values a tight mapping between the Docker
 │       ├── registry.py    # OCI v2 registries + Docker Hub HTTPS APIs (no daemon)
 │       ├── prompts.py     # @mcp.prompt() templates for common docker workflows
 │       └── resources.py   # @mcp.resource() endpoints exposing SDK + CLI + registry docs
-└── tests/                 # pytest suite, mirrors `docker_mcp/tools/` one-to-one
-    └── integration/       # tests that hit a real Docker daemon or docker.io
+├── tests/                 # pytest suite, mirrors `docker_mcp/tools/` one-to-one
+│   └── integration/       # tests that hit a real Docker daemon or docker.io
+├── assets/                # bundle assets (e.g. the .mcpb icon) packed into the Desktop Extension
+├── scripts/               # developer convenience scripts (not used by CI) — e.g. build-mcpb.sh
+└── dist/                  # build output (git-ignored) — local .mcpb test bundles land here
 ```
 
 Each `docker_mcp/tools/<file>.py` has a matching `tests/test_<file>.py`. New modules must be added to `docker_mcp/tools/__init__.py` and have a corresponding test file. Tool modules that wrap CLI features must funnel every subprocess call through `docker_mcp/tools/_cli.py` so the cross-platform safety concerns (binary discovery, no shell, UTF-8 decoding, output capping, Windows console suppression, env scrubbing) live in one place.
@@ -496,6 +499,20 @@ uv add --group dev <package>
 ```
 
 CI runs both `pytest` and `ruff` on every push and pull request via `.github/workflows/premerge.yaml`.
+
+### Building a local Desktop Extension (.mcpb)
+
+To smoke-test the Claude Desktop Extension locally, pack a bundle with the developer helper in `scripts/`:
+
+```bash
+# pack dist/docker-mcp-server-<version>.mcpb (auto-increments -1, -2, … if it exists)
+scripts/build-mcpb.sh
+
+# …or give it an explicit name (a .mcpb extension is added if missing)
+scripts/build-mcpb.sh my-test-bundle
+```
+
+It reads the version from `pyproject.toml`, creates `dist/` if needed, writes a `.sha256` alongside the bundle, and packs via Anthropic's `mcpb` CLI (a global `mcpb`, else `npx @anthropic-ai/mcpb`; see `--help` for the `MCPB=` override). The official release bundle is built separately by `.github/workflows/publish-mcpb.yaml` — this script is for local testing only and is **not** used by CI.
 
 ### Reporting issues
 

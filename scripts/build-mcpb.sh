@@ -54,7 +54,11 @@ while [ $# -gt 0 ]; do
 			name="$1"; shift ;;
 	esac
 done
-[ $# -eq 0 ] || { [ -z "$name" ] && name="$1"; }
+# Anything after `--` is a positional arg; apply the same single-name rule (no option parsing).
+for arg in "$@"; do
+	[ -z "$name" ] || die "unexpected extra argument: $arg (only one name is accepted)"
+	name="$arg"
+done
 
 # --- resolve the mcpb invocation ----------------------------------------------------------------
 # Prefer an explicit override, then a globally-installed `mcpb`, then `npx @anthropic-ai/mcpb`

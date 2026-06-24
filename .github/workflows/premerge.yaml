@@ -106,8 +106,22 @@ jobs:
         # Opt-in: set DOCKERHUB_USER / DOCKERHUB_TOKEN as repo secrets to authenticate.
         # Without them, the job runs anonymous and the existing skip-on-pull-failure
         # behaviour in the compose lifecycle test catches throttling.
+        #
+        # This `docker login` authenticates the *daemon/CLI*-backed tests (compose pulls,
+        # etc.) by writing ~/.docker/config.json. It does NOT cover the registry HTTP tools
+        # (registry_*), which hit registry-1.docker.io over httpx and authenticate only via
+        # explicit args or the DOCKER_MCP_SERVER_REGISTRY_* env vars below — they never read
+        # config.json. Both mechanisms are needed; don't drop one as redundant.
         if: ${{ env.DOCKERHUB_TOKEN != '' && env.DOCKERHUB_USER != '' }}
         run: echo "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USER" --password-stdin
 
       - name: Run integration tests
+        # Authenticate the httpx-backed registry_* tools so their alpine manifest/config tests
+        # don't 429 on Docker Hub's anonymous ~100-pull/6h-per-IP cap (CI runners share an
+        # egress IP). The registry tools read these env vars (registry.py:_env_credentials);
+        # unset (e.g. fork PRs, which get no secrets) → anonymous, and the skip-on-429 in
+        # test_registry.py is the safety net.
+        env:
+          DOCKER_MCP_SERVER_REGISTRY_USERNAME: ${{ secrets.DOCKERHUB_USER }}
+          DOCKER_MCP_SERVER_REGISTRY_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         run: uv run pytest -m integration -v --tb=short

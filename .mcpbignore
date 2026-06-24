@@ -8,6 +8,7 @@ server/venv/
 
 # Tests, tooling, CI, and dev metadata add nothing at runtime.
 tests/
+scripts/
 .github/
 .idea/
 .vscode/

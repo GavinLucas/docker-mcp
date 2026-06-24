@@ -34,17 +34,26 @@ def _skip_if_no_hub_network():
 
 def _call_or_skip(fn, *args, **kwargs):
     """
-    Run a registry/Hub call, skipping (not failing) on a sustained upstream 5xx.
+    Run a registry/Hub call, skipping (not failing) on a sustained upstream 5xx or a 429 rate-limit.
 
     The tool already retries a transient blip internally (see _get_with_retry_policy); only a
     sustained outage reaches here. These tests validate our parsing, not Docker Hub's uptime, so
     a 502/503/504 from docker.io is an upstream problem, not a regression in this code.
+
+    A 429 is the same kind of out-of-our-control condition: Docker Hub caps anonymous pulls at
+    ~100 requests / 6h *per IP*, and CI runners share an egress IP with countless other jobs, so
+    the budget is routinely exhausted by unrelated traffic. The tool surfaces it as a RuntimeError
+    carrying the stable `(HTTP 429)` marker (see registry.py:_raise_rate_limited).
     """
     try:
         return fn(*args, **kwargs)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (502, 503, 504):
             pytest.skip(f"Docker Hub returned a sustained {exc.response.status_code}; skipping: {exc}")
+        raise
+    except RuntimeError as exc:
+        if "(HTTP 429)" in str(exc):
+            pytest.skip(f"Docker Hub rate-limited the shared CI IP (HTTP 429); skipping: {exc}")
         raise
 
 

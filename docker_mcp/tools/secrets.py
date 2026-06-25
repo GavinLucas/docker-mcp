@@ -53,9 +53,16 @@ def list_secrets(filters: dict | None = None, host: str | None = None) -> list:
 @tool()
 def remove_secret(secret_id: str, host: str | None = None) -> bool:
     """
-    Remove a swarm secret.
+    Remove a Swarm secret; requires a swarm manager.
 
-    args: secret_id - The secret id
+    Removing a secret does not immediately affect running service tasks — tasks that already
+    have the secret mounted retain access until they are restarted or the service is updated.
+    Use `list_services` and inspect each service's spec via `get_service` to identify
+    services that mount the secret before removing it (service filters do not support
+    filtering by secret reference). The secret id (not name) is required; retrieve it from `list_secrets`
+    or `get_secret`.
+
+    args: secret_id - The secret id to remove
     returns: bool - True after removal
     """
     _get_client(host).secrets.get(secret_id).remove()

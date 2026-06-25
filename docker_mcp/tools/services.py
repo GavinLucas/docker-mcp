@@ -14,12 +14,20 @@ def create_service(
     image: str, command: str | list | None = None, extra_kwargs: dict | None = None, host: str | None = None
 ) -> dict:
     """
-    Create a swarm service.
+    Create a Swarm service; requires a swarm manager node.
+
+    Use this instead of `run_container` when you need replicated or global scheduling,
+    rolling updates, or automatic restart across the swarm. Common `extra_kwargs` keys:
+    `name` (str), `env` (list of "KEY=VAL"), `mode` ({"Replicated": {"Replicas": N}} or
+    {"Global": {}}), `networks` (list of network names/ids), `endpoint_spec`
+    ({"Ports": [{"PublishedPort": 80, "TargetPort": 8080}]}), `labels` (dict),
+    `restart_policy` ({"Condition": "on-failure", "MaxAttempts": 3}),
+    `resources` ({"Limits": {"NanoCPUs": 500000000, "MemoryBytes": 134217728}}).
 
     args:
-        image - The image for the service
-        command - The command to run in service tasks
-        extra_kwargs - Additional ServiceCollection.create kwargs (name, env, mode, etc.)
+        image - Image to run service tasks from (e.g. "nginx:alpine")
+        command - Override the image's default command; string or list of strings
+        extra_kwargs - Additional docker-py ServiceCollection.create keyword arguments
     returns: dict - The created service's attrs
     """
     kwargs = dict(extra_kwargs or {})

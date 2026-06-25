@@ -4,15 +4,19 @@ name: 'Publish Homebrew formula'
 # the frozen lockfile so versions are pinned), packages each set into a wheelhouse tarball, attaches
 # both to the release, then pushes an updated Formula/docker-mcp-server.rb to GavinLucas/homebrew-tap.
 #
-# Runs on ubuntu-latest. Both wheelhouses are built via cross-platform pip downloads using explicit
-# --platform flags, so no macOS runner is needed. Two platform flags are required per arch:
-#   arm64:   --platform macosx_11_0_arm64  +  --platform macosx_10_12_universal2
-#   x86_64:  --platform macosx_10_13_x86_64  +  --platform macosx_10_12_universal2
-# The universal2 fallback is needed because several packages (bcrypt 5.x, cryptography, pynacl)
-# publish macOS wheels only as universal2 fat binaries. pip does not automatically include
-# universal2 in x86_64/arm64 tag expansions; adding it explicitly covers both.
-# pip's --python-version flag does not generate correct abi3 tags when run under an older
-# interpreter, so we install Python 3.14 via uv and run all pip download calls under it.
+# Runs on ubuntu-latest. Both wheelhouses are built via cross-platform pip downloads:
+#   arm64:   --platform macosx_<floor>_arm64  +  --platform macosx_<floor>_universal2
+#   x86_64:  --platform macosx_<floor>_x86_64  +  --platform macosx_<floor>_universal2
+# The floor is Homebrew's minimum supported macOS, discovered at runtime by querying the
+# Homebrew formulae API (oldest Intel bottle of a core formula → version number). pip's
+# backwards-compatible tag expansion means a higher floor still covers all wheels with older
+# macOS minimums (10.x, 11.x, 12.x, ...).
+# The universal2 flag is required alongside each arch because some packages (bcrypt, cryptography,
+# pynacl) publish macOS wheels only as universal2 fat binaries; pip does not fold universal2 into
+# the arch-specific tag expansion automatically.
+# --python-version is derived from requires-python in pyproject.toml so it tracks Python bumps.
+# The codename→version map in "Resolve macOS floor" needs a new entry when Apple announces a new
+# macOS release (well before it could become Homebrew's minimum); the floor itself self-updates.
 #
 # Homebrew's install sandbox has no network access, so all dependencies must ship inside the tarball.
 # `--only-binary :all:` fails loudly if any locked dep lacks a macOS binary wheel — that is the
@@ -54,39 +58,61 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
-      - name: Resolve version from tag
+      - name: Resolve version, Python target, and macOS floor
         run: |
           set -euo pipefail
           TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
 
+          PYTHON_VER=$(python3 -c "
+          import tomllib, re
+          d = tomllib.load(open('pyproject.toml', 'rb'))
+          print(re.search(r'[\d.]+', d['project']['requires-python']).group())
+          ")
+          echo "PYTHON_VER=$PYTHON_VER" >> "$GITHUB_ENV"
+
+          # Discover Homebrew's minimum supported macOS from their formulae API.
+          # Add a new entry to VERSIONS when Apple announces a new macOS release.
+          MACOS_FLOOR=$(python3 -c "
+          import json, sys, urllib.request
+          VERSIONS = {'monterey': 12, 'ventura': 13, 'sonoma': 14, 'sequoia': 15, 'tahoe': 16}
+          try:
+              data = json.loads(urllib.request.urlopen(
+                  'https://formulae.brew.sh/api/formula/curl.json', timeout=15).read())
+              intel = sorted(k for k in data['bottle']['stable']['files']
+                             if not k.startswith('arm64_') and 'linux' not in k)
+              codename = intel[0]
+              ver = VERSIONS.get(codename)
+              if ver is None:
+                  print(f'Unknown macOS codename {codename!r} — add it to VERSIONS', file=sys.stderr)
+                  sys.exit(1)
+              print(f'{ver}_0')
+          except SystemExit:
+              raise
+          except Exception as e:
+              print(f'Failed to resolve Homebrew macOS floor: {e}', file=sys.stderr)
+              sys.exit(1)
+          ")
+          echo "MACOS_FLOOR=$MACOS_FLOOR" >> "$GITHUB_ENV"
+          echo "Python target: $PYTHON_VER  |  macOS floor: $MACOS_FLOOR" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Export locked dependencies
         # --no-emit-project excludes docker-mcp-server itself (downloaded separately below so we
         # get the published PyPI wheel rather than a local build).
-        # --no-hashes keeps the requirements file simple; wheel integrity is enforced by shasum.
+        # --no-hashes keeps the requirements file simple; wheel integrity is enforced by sha256sum.
         run: uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt
-
-      - name: Install Python 3.14 and bootstrap pip
-        # pip's --python-version flag does not correctly expand abi3 compatibility tags when run
-        # under an older interpreter (e.g. 3.12). Running pip under the actual 3.14 interpreter
-        # fixes the tag resolution — bcrypt 5.x, cryptography, etc. are found correctly.
-        run: |
-          uv python install 3.14
-          PYTHON_314=$(uv python find 3.14)
-          "$PYTHON_314" -m ensurepip --upgrade
-          echo "PYTHON_314=$PYTHON_314" >> "$GITHUB_ENV"
 
       - name: Download macOS arm64 wheelhouse
         # See top-of-file comment for the --platform rationale.
         run: |
           set -euo pipefail
           mkdir wheelhouse-arm64
-          "$PYTHON_314" -m pip download \
+          python3 -m pip download \
             --no-deps \
-            --platform macosx_11_0_arm64 \
-            --platform macosx_10_12_universal2 \
-            --python-version 3.14 \
+            --platform "macosx_${MACOS_FLOOR}_arm64" \
+            --platform "macosx_${MACOS_FLOOR}_universal2" \
+            --python-version "$PYTHON_VER" \
             --implementation cp \
             --only-binary :all: \
             -r /tmp/requirements.txt \
@@ -97,11 +123,11 @@ jobs:
           # ordering guarantee, so the wheel may not yet be on PyPI when this step starts.
           downloaded=false
           for attempt in 1 2 3 4 5; do
-            if "$PYTHON_314" -m pip download \
+            if python3 -m pip download \
                 --no-deps \
-                --platform macosx_11_0_arm64 \
-                --platform macosx_10_12_universal2 \
-                --python-version 3.14 \
+                --platform "macosx_${MACOS_FLOOR}_arm64" \
+                --platform "macosx_${MACOS_FLOOR}_universal2" \
+                --python-version "$PYTHON_VER" \
                 --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
@@ -113,33 +139,26 @@ jobs:
           $downloaded || { echo "docker-mcp-server wheel not available after 5 attempts"; exit 1; }
 
       - name: Download macOS x86_64 wheelhouse
-        # Two --platform flags are required because some packages (bcrypt 5.x, cryptography, pynacl)
-        # publish macOS wheels only as universal2 fat binaries (arm64+x86_64), while others
-        # (cffi 2.x, pydantic-core, rpds-py) publish cp314-specific x86_64 wheels targeting
-        # macosx_10_12 or macosx_10_13. The older --platform macosx_10_9_x86_64 misses both:
-        # universal2 isn't in the x86_64 tag set, and 10.9 < the minimum version of the
-        # cp314 x86_64 wheels. Using macosx_10_13_x86_64 covers all cp314 x86_64 wheels
-        # (they're all 10.12 or 10.13 minimum; pip expands to compatible older tags) and
-        # adding macosx_10_12_universal2 covers the universal2-only packages.
+        # See top-of-file comment for the --platform rationale.
         run: |
           set -euo pipefail
           mkdir wheelhouse-x86_64
-          "$PYTHON_314" -m pip download \
+          python3 -m pip download \
             --no-deps \
-            --platform macosx_10_13_x86_64 \
-            --platform macosx_10_12_universal2 \
-            --python-version 3.14 \
+            --platform "macosx_${MACOS_FLOOR}_x86_64" \
+            --platform "macosx_${MACOS_FLOOR}_universal2" \
+            --python-version "$PYTHON_VER" \
             --implementation cp \
             --only-binary :all: \
             -r /tmp/requirements.txt \
             -d wheelhouse-x86_64
           downloaded=false
           for attempt in 1 2 3 4 5; do
-            if "$PYTHON_314" -m pip download \
+            if python3 -m pip download \
                 --no-deps \
-                --platform macosx_10_13_x86_64 \
-                --platform macosx_10_12_universal2 \
-                --python-version 3.14 \
+                --platform "macosx_${MACOS_FLOOR}_x86_64" \
+                --platform "macosx_${MACOS_FLOOR}_universal2" \
+                --python-version "$PYTHON_VER" \
                 --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
@@ -157,8 +176,8 @@ jobs:
           X86_64="docker-mcp-server-${{ env.VERSION }}-wheelhouse-macos-x86_64.tar.gz"
           (cd wheelhouse-arm64  && tar czf "../$ARM64"  .)
           (cd wheelhouse-x86_64 && tar czf "../$X86_64" .)
-          SHA_ARM64=$(shasum -a 256 "$ARM64"  | awk '{print $1}')
-          SHA_X86_64=$(shasum -a 256 "$X86_64" | awk '{print $1}')
+          SHA_ARM64=$(sha256sum "$ARM64"  | awk '{print $1}')
+          SHA_X86_64=$(sha256sum "$X86_64" | awk '{print $1}')
           echo "SHA_ARM64=$SHA_ARM64"   >> "$GITHUB_ENV"
           echo "SHA_X86_64=$SHA_X86_64" >> "$GITHUB_ENV"
           echo "arm64  sha256: \`$SHA_ARM64\`"  >> "$GITHUB_STEP_SUMMARY"

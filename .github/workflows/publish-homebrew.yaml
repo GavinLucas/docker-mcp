@@ -71,12 +71,21 @@ jobs:
             -d wheelhouse-arm64
           # docker-mcp-server is a pure-python wheel (py3-none-any); platform-independent but must
           # be present in each wheelhouse for the offline install to work.
-          uv pip download \
-            --no-deps \
-            --python-version 3.14 \
-            --only-binary :all: \
-            "docker-mcp-server==${{ env.VERSION }}" \
-            -d wheelhouse-arm64
+          # Retry loop: publish-homebrew and publish-pypi both fire on release.published with no
+          # ordering guarantee, so the wheel may not yet be on PyPI when this step starts.
+          downloaded=false
+          for attempt in 1 2 3 4 5; do
+            if uv pip download \
+                --no-deps \
+                --python-version 3.14 \
+                --only-binary :all: \
+                "docker-mcp-server==${{ env.VERSION }}" \
+                -d wheelhouse-arm64; then
+              downloaded=true; break
+            fi
+            [ "$attempt" -lt 5 ] && { echo "Attempt $attempt/5 failed; retrying in 30 s..."; sleep 30; }
+          done
+          $downloaded || { echo "docker-mcp-server wheel not available after 5 attempts"; exit 1; }
 
       - name: Download macOS x86_64 wheelhouse
         run: |
@@ -89,12 +98,19 @@ jobs:
             --only-binary :all: \
             -r /tmp/requirements.txt \
             -d wheelhouse-x86_64
-          uv pip download \
-            --no-deps \
-            --python-version 3.14 \
-            --only-binary :all: \
-            "docker-mcp-server==${{ env.VERSION }}" \
-            -d wheelhouse-x86_64
+          downloaded=false
+          for attempt in 1 2 3 4 5; do
+            if uv pip download \
+                --no-deps \
+                --python-version 3.14 \
+                --only-binary :all: \
+                "docker-mcp-server==${{ env.VERSION }}" \
+                -d wheelhouse-x86_64; then
+              downloaded=true; break
+            fi
+            [ "$attempt" -lt 5 ] && { echo "Attempt $attempt/5 failed; retrying in 30 s..."; sleep 30; }
+          done
+          $downloaded || { echo "docker-mcp-server wheel not available after 5 attempts"; exit 1; }
 
       - name: Package wheelhouses and compute SHA-256 hashes
         run: |

@@ -101,12 +101,23 @@ jobs:
           $downloaded || { echo "docker-mcp-server wheel not available after 5 attempts"; exit 1; }
 
       - name: Download macOS x86_64 wheelhouse
+        # Two --platform flags are required because some packages (bcrypt 5.x, cryptography, pynacl)
+        # publish macOS wheels only as universal2 fat binaries (arm64+x86_64), while others
+        # (cffi 2.x, pydantic-core, rpds-py) publish cp314-specific x86_64 wheels targeting
+        # macosx_10_12 or macosx_10_13. The older --platform macosx_10_9_x86_64 misses both:
+        # universal2 isn't in the x86_64 tag set, and 10.9 < the minimum version of the
+        # cp314 x86_64 wheels. Using macosx_10_13_x86_64 covers all cp314 x86_64 wheels
+        # (they're all 10.12 or 10.13 minimum; pip expands to compatible older tags) and
+        # adding macosx_10_12_universal2 covers the universal2-only packages.
         run: |
           set -euo pipefail
           mkdir wheelhouse-x86_64
           "$PYTHON_314" -m pip download \
             --no-deps \
-            --platform macosx_10_9_x86_64 \
+            --platform macosx_10_13_x86_64 \
+            --platform macosx_10_12_universal2 \
+            --python-version 3.14 \
+            --implementation cp \
             --only-binary :all: \
             -r /tmp/requirements.txt \
             -d wheelhouse-x86_64
@@ -114,7 +125,10 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if "$PYTHON_314" -m pip download \
                 --no-deps \
-                --platform macosx_10_9_x86_64 \
+                --platform macosx_10_13_x86_64 \
+                --platform macosx_10_12_universal2 \
+                --python-version 3.14 \
+                --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
                 -d wheelhouse-x86_64; then

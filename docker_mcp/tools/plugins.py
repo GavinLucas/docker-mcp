@@ -18,11 +18,17 @@ def get_plugin(name: str, host: str | None = None) -> dict:
 @tool()
 def install_plugin(remote_name: str, local_name: str | None = None, host: str | None = None) -> dict:
     """
-    Install a plugin from a remote reference.
+    Install a plugin from Docker Hub; the plugin is disabled after installation.
+
+    `remote_name` is a Docker Hub reference in `author/name:tag` form, e.g.
+    `vieux/sshfs:latest`. The daemon handles permission grants non-interactively.
+    After installation the plugin is disabled — call `enable_plugin` to activate it,
+    and optionally `configure_plugin` first if it requires settings. Use `list_plugins`
+    to confirm installation or `remove_plugin` to uninstall.
 
     args:
-        remote_name - The remote plugin reference
-        local_name - Optional local name for the plugin
+        remote_name - Docker Hub plugin reference, e.g. "vieux/sshfs:latest"
+        local_name - Alias to refer to the plugin locally; defaults to remote_name
     returns: dict - The installed plugin's attrs
     """
     return _get_client(host).plugins.install(remote_name, local_name=local_name).attrs
@@ -79,11 +85,17 @@ def disable_plugin(name: str, force: bool = False, host: str | None = None) -> b
 @tool()
 def enable_plugin(name: str, timeout: int = 0, host: str | None = None) -> bool:
     """
-    Enable a plugin.
+    Activate an installed plugin so Docker routes relevant API calls through it.
+
+    Plugins are disabled after `install_plugin` and after `disable_plugin` — call this to
+    make the plugin operational. If the plugin exposes configuration (visible via
+    `get_plugin`), call `configure_plugin` while it is still disabled before enabling it.
+    `timeout` controls how long Docker waits for the plugin process to become healthy;
+    0 means wait indefinitely.
 
     args:
-        name - The plugin name
-        timeout - Timeout in seconds (0 means no timeout)
+        name - Plugin name or id to enable
+        timeout - Seconds to wait for the plugin to become healthy (0 = no timeout)
     returns: bool - True after the plugin is enabled
     """
     _get_client(host).plugins.get(name).enable(timeout=timeout)
@@ -97,8 +109,8 @@ def push_plugin(name: str, host: str | None = None) -> dict:
 
     The daemon must already be authenticated with the target registry — call `login` first if
     needed. `name` must include the registry host for any registry other than Docker Hub,
-    e.g. "registry.example.com/myplugin:1.0". The plugin must exist locally (use
-    `install_plugin` or `build` to create it first).
+    e.g. "registry.example.com/myplugin:1.0". The plugin must already exist locally
+    (installed via `install_plugin` or built externally with `docker plugin create`).
 
     args: name - Plugin name including tag, e.g. "myorg/myplugin:latest"
     returns: dict - Push progress/status events returned by the daemon

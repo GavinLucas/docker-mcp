@@ -80,6 +80,9 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if pip3 download \
                 --no-deps \
+                --platform macosx_11_0_arm64 \
+                --python-version 3.14 \
+                --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
                 -d wheelhouse-arm64; then
@@ -105,6 +108,9 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if pip3 download \
                 --no-deps \
+                --platform macosx_10_9_x86_64 \
+                --python-version 3.14 \
+                --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
                 -d wheelhouse-x86_64; then

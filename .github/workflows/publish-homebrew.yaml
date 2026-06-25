@@ -64,7 +64,7 @@ jobs:
       - name: Export locked dependencies
         # --no-emit-project excludes docker-mcp-server itself (downloaded separately below so we
         # get the published PyPI wheel rather than a local build).
-        # --no-hashes keeps the requirements file simple; wheel integrity is enforced by shasum.
+        # --no-hashes keeps the requirements file simple; wheel integrity is enforced by sha256sum.
         run: uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt
 
       - name: Download macOS arm64 wheelhouse
@@ -72,7 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir wheelhouse-arm64
-          pip3 download \
+          python3 -m pip download \
             --no-deps \
             --platform macosx_11_0_arm64 \
             --platform macosx_10_12_universal2 \
@@ -87,7 +87,7 @@ jobs:
           # ordering guarantee, so the wheel may not yet be on PyPI when this step starts.
           downloaded=false
           for attempt in 1 2 3 4 5; do
-            if pip3 download \
+            if python3 -m pip download \
                 --no-deps \
                 --platform macosx_11_0_arm64 \
                 --platform macosx_10_12_universal2 \
@@ -114,7 +114,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir wheelhouse-x86_64
-          pip3 download \
+          python3 -m pip download \
             --no-deps \
             --platform macosx_10_13_x86_64 \
             --platform macosx_10_12_universal2 \
@@ -125,7 +125,7 @@ jobs:
             -d wheelhouse-x86_64
           downloaded=false
           for attempt in 1 2 3 4 5; do
-            if pip3 download \
+            if python3 -m pip download \
                 --no-deps \
                 --platform macosx_10_13_x86_64 \
                 --platform macosx_10_12_universal2 \

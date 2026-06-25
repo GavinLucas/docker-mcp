@@ -4,15 +4,15 @@ name: 'Publish Homebrew formula'
 # the frozen lockfile so versions are pinned), packages each set into a wheelhouse tarball, attaches
 # both to the release, then pushes an updated Formula/docker-mcp-server.rb to GavinLucas/homebrew-tap.
 #
-# Runs on ubuntu-latest. Both wheelhouses are built via cross-platform pip downloads using explicit
-# --platform flags, so no macOS runner is needed. Two platform flags are required per arch:
-#   arm64:   --platform macosx_11_0_arm64  +  --platform macosx_10_12_universal2
-#   x86_64:  --platform macosx_10_13_x86_64  +  --platform macosx_10_12_universal2
-# The universal2 fallback is needed because several packages (bcrypt 5.x, cryptography, pynacl)
-# publish macOS wheels only as universal2 fat binaries. pip does not automatically include
-# universal2 in x86_64/arm64 tag expansions; adding it explicitly covers both.
-# --python-version 3.14 --implementation cp tells pip to generate cp314 compatibility tags;
-# this is sufficient regardless of the pip interpreter version on the runner.
+# Runs on ubuntu-latest. Both wheelhouses are built via cross-platform pip downloads:
+#   arm64:   --platform macosx_12_0_arm64  +  --platform macosx_12_0_universal2
+#   x86_64:  --platform macosx_12_0_x86_64  +  --platform macosx_12_0_universal2
+# macosx_12_0 (Monterey) is Homebrew's minimum supported macOS. pip's backwards-compatible tag
+# expansion means this single floor covers all wheels with older macOS minimums (10.x, 11.x).
+# The universal2 flag is required alongside each arch because some packages (bcrypt, cryptography,
+# pynacl) publish macOS wheels only as universal2 fat binaries; pip does not fold universal2 into
+# the arch-specific tag expansion automatically.
+# --python-version is derived from requires-python in pyproject.toml so it tracks Python bumps.
 #
 # Homebrew's install sandbox has no network access, so all dependencies must ship inside the tarball.
 # `--only-binary :all:` fails loudly if any locked dep lacks a macOS binary wheel — that is the
@@ -54,12 +54,14 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
-      - name: Resolve version from tag
+      - name: Resolve version and Python target from pyproject.toml
         run: |
           set -euo pipefail
           TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+          PYTHON_VER=$(python3 -c "import tomllib, re; d=tomllib.load(open('pyproject.toml','rb')); print(re.search(r'[\d.]+', d['project']['requires-python']).group())")
+          echo "PYTHON_VER=$PYTHON_VER" >> "$GITHUB_ENV"
 
       - name: Export locked dependencies
         # --no-emit-project excludes docker-mcp-server itself (downloaded separately below so we
@@ -74,9 +76,9 @@ jobs:
           mkdir wheelhouse-arm64
           python3 -m pip download \
             --no-deps \
-            --platform macosx_11_0_arm64 \
-            --platform macosx_10_12_universal2 \
-            --python-version 3.14 \
+            --platform macosx_12_0_arm64 \
+            --platform macosx_12_0_universal2 \
+            --python-version "$PYTHON_VER" \
             --implementation cp \
             --only-binary :all: \
             -r /tmp/requirements.txt \
@@ -89,9 +91,9 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if python3 -m pip download \
                 --no-deps \
-                --platform macosx_11_0_arm64 \
-                --platform macosx_10_12_universal2 \
-                --python-version 3.14 \
+                --platform macosx_12_0_arm64 \
+                --platform macosx_12_0_universal2 \
+                --python-version "$PYTHON_VER" \
                 --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \
@@ -103,22 +105,15 @@ jobs:
           $downloaded || { echo "docker-mcp-server wheel not available after 5 attempts"; exit 1; }
 
       - name: Download macOS x86_64 wheelhouse
-        # Two --platform flags are required because some packages (bcrypt 5.x, cryptography, pynacl)
-        # publish macOS wheels only as universal2 fat binaries (arm64+x86_64), while others
-        # (cffi 2.x, pydantic-core, rpds-py) publish cp314-specific x86_64 wheels targeting
-        # macosx_10_12 or macosx_10_13. The older --platform macosx_10_9_x86_64 misses both:
-        # universal2 isn't in the x86_64 tag set, and 10.9 < the minimum version of the
-        # cp314 x86_64 wheels. Using macosx_10_13_x86_64 covers all cp314 x86_64 wheels
-        # (they're all 10.12 or 10.13 minimum; pip expands to compatible older tags) and
-        # adding macosx_10_12_universal2 covers the universal2-only packages.
+        # See top-of-file comment for the --platform rationale.
         run: |
           set -euo pipefail
           mkdir wheelhouse-x86_64
           python3 -m pip download \
             --no-deps \
-            --platform macosx_10_13_x86_64 \
-            --platform macosx_10_12_universal2 \
-            --python-version 3.14 \
+            --platform macosx_12_0_x86_64 \
+            --platform macosx_12_0_universal2 \
+            --python-version "$PYTHON_VER" \
             --implementation cp \
             --only-binary :all: \
             -r /tmp/requirements.txt \
@@ -127,9 +122,9 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if python3 -m pip download \
                 --no-deps \
-                --platform macosx_10_13_x86_64 \
-                --platform macosx_10_12_universal2 \
-                --python-version 3.14 \
+                --platform macosx_12_0_x86_64 \
+                --platform macosx_12_0_universal2 \
+                --python-version "$PYTHON_VER" \
                 --implementation cp \
                 --only-binary :all: \
                 "docker-mcp-server==${{ env.VERSION }}" \

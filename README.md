@@ -62,6 +62,28 @@ To pin a specific version, append `==<version>` to the package name (e.g. `docke
 
 To pin a specific revision, append `@<tag-or-commit>` to the git URL.
 
+**Homebrew (macOS).** If you prefer Homebrew, the server is available from a [personal tap](https://github.com/GavinLucas/homebrew-tap):
+
+```bash
+brew install gavinlucas/tap/docker-mcp-server
+```
+
+Then point your MCP client at the installed binary:
+
+```json
+{
+  "mcpServers": {
+    "docker-mcp-server": {
+      "command": "docker-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+> **Homebrew 6.0+:** The fully-qualified form above auto-trusts this tap for that one formula. If you `brew tap gavinlucas/tap` first and then use the short name, run `brew trust --formula gavinlucas/tap/docker-mcp-server` before installing.
+
 ### Install as a Desktop Extension (.mcpb)
 
 For [Claude Desktop](https://claude.com/download), a one-click bundle is attached to each

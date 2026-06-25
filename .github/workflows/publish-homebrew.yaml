@@ -1,0 +1,171 @@
+name: 'Publish Homebrew formula'
+
+# On each GitHub Release: downloads pre-built macOS wheels for arm64 and x86_64 from PyPI (using
+# the frozen lockfile so versions are pinned), packages each set into a wheelhouse tarball, attaches
+# both to the release, then pushes an updated Formula/docker-mcp-server.rb to GavinLucas/homebrew-tap.
+#
+# Homebrew's install sandbox has no network access, so all dependencies must ship inside the tarball.
+# `--only-binary :all:` fails loudly if any locked dep lacks a macOS binary wheel — that is the
+# guardrail; do not remove it. The one known gap (cryptography ≥49 on Intel) is already pinned out
+# in pyproject.toml.
+#
+# Requires the repository secret TAP_GITHUB_TOKEN: a fine-grained PAT with Contents read+write on
+# GavinLucas/homebrew-tap. Create it at github.com/settings/tokens and add it as a secret on this
+# repo under Settings → Secrets → Actions.
+#
+# workflow_dispatch lets you backfill a release that predates this workflow (supply the tag, e.g.
+# v1.9.2). The release must already exist and docker-mcp-server must be live on PyPI for that version.
+
+permissions:
+  contents: read
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build wheelhouses for (e.g. v1.9.2)'
+        required: true
+
+jobs:
+
+  publish:
+    name: Build wheelhouses and push formula
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # upload wheelhouse tarballs to the release
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Resolve version from tag
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+      - name: Export locked dependencies
+        # --no-emit-project excludes docker-mcp-server itself (downloaded separately below so we
+        # get the published PyPI wheel rather than a local build).
+        # --no-hashes keeps the requirements file simple; wheel integrity is enforced by sha256sum.
+        run: uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt
+
+      - name: Download macOS arm64 wheelhouse
+        run: |
+          set -euo pipefail
+          mkdir wheelhouse-arm64
+          uv pip download \
+            --no-deps \
+            --python-platform aarch64-apple-darwin \
+            --python-version 3.14 \
+            --only-binary :all: \
+            -r /tmp/requirements.txt \
+            -d wheelhouse-arm64
+          # docker-mcp-server is a pure-python wheel (py3-none-any); download once into arm64 dir.
+          uv pip download \
+            --no-deps \
+            --python-version 3.14 \
+            --only-binary :all: \
+            "docker-mcp-server==${{ env.VERSION }}" \
+            -d wheelhouse-arm64
+
+      - name: Download macOS x86_64 wheelhouse
+        run: |
+          set -euo pipefail
+          mkdir wheelhouse-x86_64
+          uv pip download \
+            --no-deps \
+            --python-platform x86_64-apple-darwin \
+            --python-version 3.14 \
+            --only-binary :all: \
+            -r /tmp/requirements.txt \
+            -d wheelhouse-x86_64
+          uv pip download \
+            --no-deps \
+            --python-version 3.14 \
+            --only-binary :all: \
+            "docker-mcp-server==${{ env.VERSION }}" \
+            -d wheelhouse-x86_64
+
+      - name: Package wheelhouses and compute SHA-256 hashes
+        run: |
+          set -euo pipefail
+          ARM64="docker-mcp-server-${{ env.VERSION }}-wheelhouse-macos-arm64.tar.gz"
+          X86_64="docker-mcp-server-${{ env.VERSION }}-wheelhouse-macos-x86_64.tar.gz"
+          (cd wheelhouse-arm64  && tar czf "../$ARM64"  .)
+          (cd wheelhouse-x86_64 && tar czf "../$X86_64" .)
+          SHA_ARM64=$(sha256sum "$ARM64"  | awk '{print $1}')
+          SHA_X86_64=$(sha256sum "$X86_64" | awk '{print $1}')
+          echo "SHA_ARM64=$SHA_ARM64"   >> "$GITHUB_ENV"
+          echo "SHA_X86_64=$SHA_X86_64" >> "$GITHUB_ENV"
+          echo "arm64  sha256: \`$SHA_ARM64\`"  >> "$GITHUB_STEP_SUMMARY"
+          echo "x86_64 sha256: \`$SHA_X86_64\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Attach wheelhouses to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ env.TAG }}" \
+            "docker-mcp-server-${{ env.VERSION }}-wheelhouse-macos-arm64.tar.gz" \
+            "docker-mcp-server-${{ env.VERSION }}-wheelhouse-macos-x86_64.tar.gz" \
+            --clobber
+
+      - name: Push updated formula to homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/GavinLucas/homebrew-tap.git" tap
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          mkdir -p Formula
+          cat > Formula/docker-mcp-server.rb << FORMULA_EOF
+# This file is maintained automatically by publish-homebrew.yaml in GavinLucas/docker-mcp.
+# Do not edit by hand — changes will be overwritten on the next release.
+class DockerMcpServer < Formula
+  desc "MCP server for managing Docker via the Docker SDK for Python"
+  homepage "https://github.com/GavinLucas/docker-mcp"
+  version "$VERSION"
+  license "MIT"
+
+  depends_on "python@3.14"
+  depends_on "uv" => :build
+
+  on_macos do
+    on_arm do
+      url "https://github.com/GavinLucas/docker-mcp/releases/download/$TAG/docker-mcp-server-$VERSION-wheelhouse-macos-arm64.tar.gz"
+      sha256 "$SHA_ARM64"
+    end
+    on_intel do
+      url "https://github.com/GavinLucas/docker-mcp/releases/download/$TAG/docker-mcp-server-$VERSION-wheelhouse-macos-x86_64.tar.gz"
+      sha256 "$SHA_X86_64"
+    end
+  end
+
+  def install
+    python3 = Formula["python@3.14"].opt_bin/"python3.14"
+    system "uv", "venv", libexec.to_s, "--python", python3.to_s
+    system "uv", "pip", "install",
+      "--python", libexec.to_s,
+      "--no-index",
+      "--find-links=#{buildpath}",
+      "docker-mcp-server==#{version}"
+    bin.install_symlink libexec/"bin/docker-mcp-server"
+    bin.install_symlink libexec/"bin/docker-mcp"
+  end
+
+  test do
+    system libexec/"bin/python3", "-c", "import docker_mcp"
+  end
+end
+FORMULA_EOF
+          git add Formula/docker-mcp-server.rb
+          git commit -m "docker-mcp-server $VERSION"
+          git push

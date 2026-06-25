@@ -22,9 +22,10 @@ def install_plugin(remote_name: str, local_name: str | None = None, host: str | 
 
     `remote_name` is a Docker Hub reference in `author/name:tag` form, e.g.
     `vieux/sshfs:latest`. The daemon handles permission grants non-interactively.
-    After installation the plugin is disabled — call `enable_plugin` to activate it,
-    and optionally `configure_plugin` first if it requires settings. Use `list_plugins`
-    to confirm installation or `remove_plugin` to uninstall.
+    Docker installs plugins in a disabled state by default — call `enable_plugin` to
+    activate it, and optionally `configure_plugin` first if it requires settings.
+    Use `get_plugin` to confirm the installed state, `list_plugins` to list all plugins,
+    or `remove_plugin` to uninstall.
 
     args:
         remote_name - Docker Hub plugin reference, e.g. "vieux/sshfs:latest"
@@ -87,8 +88,8 @@ def enable_plugin(name: str, timeout: int = 0, host: str | None = None) -> bool:
     """
     Activate an installed plugin so Docker routes relevant API calls through it.
 
-    Plugins are disabled after `install_plugin` and after `disable_plugin` — call this to
-    make the plugin operational. If the plugin exposes configuration (visible via
+    Plugins are installed in a disabled state by Docker and are also disabled after
+    `disable_plugin` — call this to make the plugin operational. If the plugin exposes configuration (visible via
     `get_plugin`), call `configure_plugin` while it is still disabled before enabling it.
     `timeout` controls how long Docker waits for the plugin process to become healthy;
     0 means wait indefinitely.

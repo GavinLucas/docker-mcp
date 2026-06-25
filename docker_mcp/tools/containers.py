@@ -217,9 +217,9 @@ def start_container(id_or_name: str, host: str | None = None) -> dict:
     Start an existing stopped container.
 
     Use this to restart a container that was previously created or stopped without removing it.
-    To create and start a new container in one step use `run_container` instead. If the
-    container is already running this is a no-op. To restart a running container (stop then
-    start) use `restart_container`.
+    To create and start a new container in one step use `run_container` instead. Calling on
+    an already-running container has no effect (the daemon returns 304 and no error is
+    raised). To stop then start a running container use `restart_container`.
 
     args: id_or_name - Container id (full or short) or name
     returns: dict - The container's full attrs after starting

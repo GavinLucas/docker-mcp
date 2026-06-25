@@ -144,8 +144,9 @@ def unlock_swarm(key: str, host: str | None = None) -> bool:
     When autolock is enabled (via `init_swarm` or `update_swarm`), manager nodes require
     the unlock key after every restart before they can rejoin the swarm and resume
     scheduling. Must be called on the locked manager node directly. Retrieve the current
-    unlock key with `get_swarm_unlock_key` — store it securely when enabling autolock as
-    it cannot be retrieved after the node is locked. Once unlocked the manager resumes
+    unlock key with `get_swarm_unlock_key` from any unlocked manager — store it securely
+    when enabling autolock, since a locked node cannot serve API requests and cannot return
+    its own key while locked (other unlocked managers can still serve the key). Once unlocked the manager resumes
     automatically.
 
     args: key - The swarm unlock key (from `get_swarm_unlock_key`)

@@ -19,10 +19,11 @@ def create_volume(
 
     Named volumes persist after their containers stop or are removed; use them for
     databases, uploads, or any data that must outlive a container. Anonymous volumes
-    (no `name`) are removed when their container is removed. Common `driver_opts` for
-    the default `local` driver: bind-mount an existing host path with
-    `{"type": "bind", "device": "/host/path", "o": "bind"}`, or mount an NFS share with
-    `{"type": "nfs", "device": "server:/export", "o": "addr=server,rw"}`. Third-party
+    (no `name`) are only removed automatically when the container was started with `--rm`
+    or removed with `docker rm -v`; otherwise they accumulate and must be pruned manually.
+    Common `driver_opts` for the default `local` driver: bind-mount an existing host path
+    with `{"type": "none", "device": "/host/path", "o": "bind"}`, or mount an NFS share
+    with `{"type": "nfs", "device": "server:/export", "o": "addr=server,rw"}`. Third-party
     drivers (e.g. `rexray`, `convoy`) accept their own option keys.
 
     args:

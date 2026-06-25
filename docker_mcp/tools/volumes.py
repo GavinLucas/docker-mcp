@@ -15,7 +15,7 @@ def create_volume(
     host: str | None = None,
 ) -> dict:
     """
-    Create a named volume managed by Docker.
+    Create a volume managed by Docker.
 
     Named volumes persist after their containers stop or are removed; use them for
     databases, uploads, or any data that must outlive a container. Anonymous volumes

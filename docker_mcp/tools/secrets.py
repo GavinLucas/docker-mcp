@@ -57,8 +57,9 @@ def remove_secret(secret_id: str, host: str | None = None) -> bool:
 
     Removing a secret does not immediately affect running service tasks — tasks that already
     have the secret mounted retain access until they are restarted or the service is updated.
-    Use `list_services` with a label filter to identify services that reference the secret
-    before removing it. The secret id (not name) is required; retrieve it from `list_secrets`
+    Use `list_services` and inspect each service's spec via `get_service` to identify
+    services that mount the secret before removing it (service filters do not support
+    filtering by secret reference). The secret id (not name) is required; retrieve it from `list_secrets`
     or `get_secret`.
 
     args: secret_id - The secret id to remove

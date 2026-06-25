@@ -405,6 +405,7 @@ Connecting this server to an AI agent grants it the same level of access as a lo
 | Docker Hub (container) | [gavinlucas/docker-mcp-server](https://hub.docker.com/r/gavinlucas/docker-mcp-server) |
 | Desktop Extension (.mcpb) | [GitHub Releases](https://github.com/GavinLucas/docker-mcp/releases) |
 | Official MCP Registry | [io.github.GavinLucas/docker-mcp-server](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.GavinLucas%2Fdocker-mcp-server/versions) |
+| Homebrew tap | [gavinlucas/homebrew-tap](https://github.com/GavinLucas/homebrew-tap) |
 | Glama | [docker-mcp-server](https://glama.ai/mcp/servers/GavinLucas/docker-mcp) |
 | mcp.so | [docker-mcp-server](https://mcp.so/server/docker-mcp-server/GavinLucas) |
 

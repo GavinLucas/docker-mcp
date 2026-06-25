@@ -374,9 +374,13 @@ def events(
 @tool()
 def close(host: str | None = None) -> bool:
     """
-    Close pooled Docker client(s) and drop them from the pool (each is rebuilt lazily on next use).
+    Close and drop pooled Docker client connection(s); each is rebuilt lazily on next use.
 
-    args: host - host label to close, or None to close every pooled client
+    Use this to force a stale or errored connection to be discarded. Prefer `reconnect` when you
+    want to immediately re-establish the connection rather than wait for the next tool call to
+    trigger a lazy rebuild. Closing all clients does not affect running containers.
+
+    args: host - host label to close; omit to close every pooled client
     returns: bool - True once closed
     """
     with _client_lock:

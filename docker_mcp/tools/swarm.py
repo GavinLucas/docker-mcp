@@ -103,12 +103,18 @@ def update_swarm(
     host: str | None = None,
 ) -> bool:
     """
-    Update the swarm configuration.
+    Update swarm-wide settings; currently exposes token and unlock-key rotation.
+
+    Must be called on a swarm manager node. Token rotation invalidates the old join token
+    immediately — nodes that have not yet joined using the old token must use the new one.
+    Existing joined nodes are unaffected. Use `get_swarm_join_tokens` to retrieve the new
+    tokens after rotation. Rotating the unlock key requires all managers to be re-unlocked
+    on restart with the new key; retrieve it immediately via `get_swarm_unlock_key`.
 
     args:
-        rotate_worker_token - Rotate the worker join token
-        rotate_manager_token - Rotate the manager join token
-        rotate_manager_unlock_key - Rotate the manager unlock key
+        rotate_worker_token - Issue a new worker join token, invalidating the current one
+        rotate_manager_token - Issue a new manager join token, invalidating the current one
+        rotate_manager_unlock_key - Issue a new autolock unlock key for manager restart
     returns: bool - True after the update completes
     """
     return _get_client(host).swarm.update(

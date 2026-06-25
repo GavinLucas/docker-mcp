@@ -143,10 +143,15 @@ def create_container(
 @tool()
 def get_container(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a container by id or name.
+    Return the full inspect detail for a single container.
 
-    args: id_or_name - The container id or name
-    returns: dict - The container's attrs
+    Use this when you need complete information about one container — config, state,
+    network settings, mounts, environment variables, and resource limits. For a quick
+    overview of many containers use `list_containers` instead (returns a summary per
+    container). For just logs or stats use `container_logs` / `container_stats`.
+
+    args: id_or_name - Container id (full or short) or name
+    returns: dict - Full container inspect attrs (equivalent to `docker inspect`)
     """
     return _get_client(host).containers.get(id_or_name).attrs
 
@@ -203,10 +208,15 @@ def prune_containers(filters: dict | None = None, host: str | None = None) -> di
 @tool()
 def start_container(id_or_name: str, host: str | None = None) -> dict:
     """
-    Start a container.
+    Start an existing stopped container.
 
-    args: id_or_name - The container id or name
-    returns: dict - The container's attrs after start
+    Use this to restart a container that was previously created or stopped without removing it.
+    To create and start a new container in one step use `run_container` instead. If the
+    container is already running this is a no-op. To restart a running container (stop then
+    start) use `restart_container`.
+
+    args: id_or_name - Container id (full or short) or name
+    returns: dict - The container's full attrs after starting
     """
     container = _get_client(host).containers.get(id_or_name)
     container.start()

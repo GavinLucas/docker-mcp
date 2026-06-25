@@ -16,6 +16,20 @@ docker-mcp-server is optimized to work efficiently with the new generation of MC
 
 The server runs entirely on your machine, either [natively](#using-the-server), as an [mcpb bundle](#install-as-a-desktop-extension-mcpb), or [containerized](#run-as-a-container), and sends no telemetry. You are entirely in control — see the [Privacy Policy](#privacy-policy).
 
+## Packages and listings
+
+| Channel | Link |
+|---------|------|
+| PyPI | [docker-mcp-server](https://pypi.org/project/docker-mcp-server/) |
+| GHCR (container) | [ghcr.io/gavinlucas/docker-mcp-server](https://github.com/GavinLucas/docker-mcp/pkgs/container/docker-mcp-server) |
+| Docker Hub (container) | [gavinlucas/docker-mcp-server](https://hub.docker.com/r/gavinlucas/docker-mcp-server) |
+| Desktop Extension (.mcpb) | [GitHub Releases](https://github.com/GavinLucas/docker-mcp/releases) |
+| Official MCP Registry | [io.github.GavinLucas/docker-mcp-server](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.GavinLucas%2Fdocker-mcp-server/versions) |
+| Glama | [docker-mcp-server](https://glama.ai/mcp/servers/GavinLucas/docker-mcp) |
+| Docker MCP Catalog | [docker/mcp-registry](https://github.com/docker/mcp-registry) |
+| awesome-mcp-servers | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) |
+| mcp.so | [docker-mcp-server](https://mcp.so/server/docker-mcp-server/GavinLucas) |
+
 ## Requirements
 
 Note: If you're using the containerized MCP server or MCPB bundle, the Python and uv requirements are taken care of for you.

@@ -38,6 +38,8 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -66,7 +68,8 @@ jobs:
             --only-binary :all: \
             -r /tmp/requirements.txt \
             -d wheelhouse-arm64
-          # docker-mcp-server is a pure-python wheel (py3-none-any); download once into arm64 dir.
+          # docker-mcp-server is a pure-python wheel (py3-none-any); platform-independent but must
+          # be present in each wheelhouse for the offline install to work.
           uv pip download \
             --no-deps \
             --python-version 3.14 \
@@ -167,5 +170,9 @@ class DockerMcpServer < Formula
 end
 FORMULA_EOF
           git add Formula/docker-mcp-server.rb
-          git commit -m "docker-mcp-server $VERSION"
-          git push
+          if git diff --cached --quiet; then
+            echo "Formula unchanged for $VERSION; nothing to push." >> "$GITHUB_STEP_SUMMARY"
+          else
+            git commit -m "docker-mcp-server $VERSION"
+            git push
+          fi

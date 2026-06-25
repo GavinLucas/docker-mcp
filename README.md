@@ -374,6 +374,18 @@ Connecting this server to an AI agent grants it the same level of access as a lo
 - **The daemon set is fixed at startup; pick it deliberately.** When `DOCKER_HOST` / `DOCKER_MCP_SERVER_HOSTS` are unset, the server's *initial* SDK connection follows your active Docker context (`DOCKER_CONTEXT` / `currentContext`) — the same daemon your `docker` CLI targets — so if that context points at a remote or production daemon, the agent connects there too. Set `DOCKER_MCP_SERVER_HOSTS` (or `DOCKER_HOST`, or select a scoped context) before starting the server to pin the target(s) deliberately; with `DOCKER_MCP_SERVER_HOSTS` the `auto`/`local` endpoints are resolved and **pinned at startup**, so they can't drift if a context changes later. After startup, `context_use` only changes the CLI default for subsequent CLI-backed tools; SDK-backed tools keep using the daemon their pooled client connected to. **There is no runtime way to introduce or retarget a daemon at an arbitrary endpoint** — `reconnect` only *rebuilds* an already-configured host's client (to recover a wedged connection), it can't point it elsewhere; to add or change a daemon, edit `DOCKER_MCP_SERVER_HOSTS` and restart. This deliberately closes a trust-expansion vector (an agent can't move the root-equivalent boundary to an unvetted endpoint mid-session). `context_create(skip_tls_verify=True)` disables TLS verification for a context; use only against trusted local daemons.
 - **Per-host read-only is an accident guard, not a security boundary.** A host marked `(ro)` in `DOCKER_MCP_SERVER_HOSTS` makes mutating/destructive tools refuse to act on it at call time (and, with several hosts, writes require naming the target host explicitly — so the agent can't change the wrong daemon by omission). Like `guard_not_self`, this is in-process convenience: it constrains the agent through this server's tools, but the daemon itself is still the trust boundary, so for a host the agent must never modify, prefer pointing it at a genuinely read-only or scoped daemon over relying on the marker alone.
 
+## Packages and listings
+
+| Channel | Link |
+|---------|------|
+| PyPI | [docker-mcp-server](https://pypi.org/project/docker-mcp-server/) |
+| GHCR (container) | [ghcr.io/gavinlucas/docker-mcp-server](https://github.com/GavinLucas/docker-mcp/pkgs/container/docker-mcp-server) |
+| Docker Hub (container) | [gavinlucas/docker-mcp-server](https://hub.docker.com/r/gavinlucas/docker-mcp-server) |
+| Desktop Extension (.mcpb) | [GitHub Releases](https://github.com/GavinLucas/docker-mcp/releases) |
+| Official MCP Registry | [io.github.GavinLucas/docker-mcp-server](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.GavinLucas%2Fdocker-mcp-server/versions) |
+| Glama | [docker-mcp-server](https://glama.ai/mcp/servers/GavinLucas/docker-mcp) |
+| mcp.so | [docker-mcp-server](https://mcp.so/server/docker-mcp-server/GavinLucas) |
+
 ## Privacy Policy
 
 docker-mcp-server collects no data, sends no telemetry, and has no author-operated backend. It runs

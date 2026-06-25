@@ -55,6 +55,12 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || github.event.inputs.tag }}
 
+      - name: Restore workflow helpers from main
+        # The formula template (scripts/docker-mcp-server.rb.tpl) was added after some release
+        # tags. Always use the current version from main so backfill workflow_dispatches work.
+        # pyproject.toml and uv.lock stay at the release tag so deps match what was shipped.
+        run: git fetch origin main && git checkout origin/main -- scripts/
+
       - name: Install uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 

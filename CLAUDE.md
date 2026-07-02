@@ -45,7 +45,7 @@ uv run pre-commit install
 ```
 
 CI (`.github/workflows/premerge.yaml`) enforces `pytest`, `ruff check`, `ruff format --check`, and
-`pyright` on every push/PR — all via `uv run`, so the dev-group pins in `pyproject.toml` (bumped by
+`pyright` on every PR and push to main — all via `uv run`, so the dev-group pins in `pyproject.toml` (bumped by
 Dependabot's monthly uv pass) are the single tool-version source. The pre-commit hooks are local
 hooks running `uv run ruff …` for the same reason, so a synced venv (`uv sync`) is required before
 committing. CI installs with `uv sync --locked`, which fails if `uv.lock` disagrees with

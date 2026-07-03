@@ -67,7 +67,7 @@ If you call one of these tools with a path that isn't on a bind mount, the serve
 Set these in the client's `env` block. Three switches restrict which tools are registered at startup (a disabled tool never appears in the client's tool list):
 
 - **`DOCKER_MCP_SERVER_READONLY`** — register only read-only tools.
-- **`DOCKER_MCP_SERVER_NO_DESTRUCTIVE`** — everything except destructive tools (`remove_*`, `prune_*`, `container_kill`, `compose_down`, …).
+- **`DOCKER_MCP_SERVER_NO_DESTRUCTIVE`** — everything except destructive tools (`*_remove`, `*_prune`, `container_kill`, `compose_down`, …).
 - **`DOCKER_MCP_SERVER_DISABLE`** — comma-separated *domains* to drop wholesale (e.g. `swarm,services,nodes,configs,secrets` for a single-host server).
 
 The older `DOCKER_MCP_*` spellings of these variables still work as deprecated aliases (the canonical `DOCKER_MCP_SERVER_*` name wins when both are set).

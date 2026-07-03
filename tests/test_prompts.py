@@ -323,7 +323,7 @@ def test_debug_container_networking_compares_networks_and_tests():
 
 def test_investigate_disk_usage_breaks_down_by_bucket():
     out = investigate_disk_usage()
-    for tool in ("df", "image_list", "image_history", "buildx_du", "volume_list"):
+    for tool in ("system_df", "image_list", "image_history", "buildx_du", "volume_list"):
         assert tool in out
     # Diagnosis only — defers actual pruning to clean_environment.
     assert "clean_environment" in out

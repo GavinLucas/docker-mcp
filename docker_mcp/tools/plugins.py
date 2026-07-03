@@ -108,7 +108,7 @@ def plugin_push(name: str, host: str | None = None) -> dict:
     """
     Push a locally built or pulled plugin image to a remote registry.
 
-    The daemon must already be authenticated with the target registry — call `login` first if
+    The daemon must already be authenticated with the target registry — call `system_login` first if
     needed. `name` must include the registry host for any registry other than Docker Hub,
     e.g. "registry.example.com/myplugin:1.0". The plugin must already exist locally
     (installed via `plugin_install` or built externally with `docker plugin create`).

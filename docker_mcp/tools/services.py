@@ -6,17 +6,17 @@ from typing import Literal, cast
 from docker_mcp.server import tool
 from docker_mcp.tools._labels import managed_filter, with_provenance
 from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded
-from docker_mcp.tools.client import _get_client
+from docker_mcp.tools.system import _get_client
 
 
 @tool()
-def create_service(
+def service_create(
     image: str, command: str | list | None = None, extra_kwargs: dict | None = None, host: str | None = None
 ) -> dict:
     """
     Create a Swarm service; requires a swarm manager node.
 
-    Use this instead of `run_container` when you need replicated or global scheduling,
+    Use this instead of `container_run` when you need replicated or global scheduling,
     rolling updates, or automatic restart across the swarm. Common `extra_kwargs` keys:
     `name` (str), `env` (list of "KEY=VAL"), `mode` ({"Replicated": {"Replicas": N}} or
     {"Global": {}}), `networks` (list of network names/ids), `endpoint_spec`
@@ -32,27 +32,27 @@ def create_service(
     """
     kwargs = dict(extra_kwargs or {})
     # Stamp the service-level `labels`; leave any caller `container_labels` untouched.
-    labels = with_provenance(kwargs.get("labels"), "create_service")
+    labels = with_provenance(kwargs.get("labels"), "service_create")
     if labels is not None:
         kwargs["labels"] = labels
     return _get_client(host).services.create(image, command=command, **kwargs).attrs
 
 
 @tool()
-def get_service(service_id: str, insert_defaults: bool | None = None, host: str | None = None) -> dict:
+def service_inspect(id_or_name: str, insert_defaults: bool | None = None, host: str | None = None) -> dict:
     """
     Get a swarm service by id or name.
 
     args:
-        service_id - The service id or name
+        id_or_name - The service id or name
         insert_defaults - Merge default values into the output
     returns: dict - The service's attrs
     """
-    return _get_client(host).services.get(service_id, insert_defaults=insert_defaults).attrs
+    return _get_client(host).services.get(id_or_name, insert_defaults=insert_defaults).attrs
 
 
 @tool()
-def list_services(filters: dict | None = None, managed_only: bool = False, host: str | None = None) -> list:
+def service_list(filters: dict | None = None, managed_only: bool = False, host: str | None = None) -> list:
     """
     List swarm services.
 
@@ -68,55 +68,66 @@ def list_services(filters: dict | None = None, managed_only: bool = False, host:
 
 
 @tool()
-def update_service(service_id: str, updates: dict, host: str | None = None) -> bool:
+def service_update(id_or_name: str, updates: dict | None = None, force: bool = False, host: str | None = None) -> bool:
     """
-    Update a swarm service's configuration.
+    Update a swarm service's configuration, or force a redeploy with no spec change.
+
+    Pass exactly one of `updates` (fields to change, same parameters as `service_create`) or
+    `force=True` (the `docker service update --force` equivalent: bumps the ForceUpdate counter so
+    the service's tasks redeploy with an unchanged spec — e.g. to reschedule after a node change or
+    re-pull a mutable tag).
 
     args:
-        service_id - The service id or name
-        updates - Fields to update on the service
+        id_or_name - The service id or name
+        updates - Fields to update on the service; exactly one of updates/force
+        force - Redeploy the service without changing its spec; exactly one of updates/force
     returns: bool - True after the update
     """
-    service = _get_client(host).services.get(service_id)
-    service.update(**updates)
+    if (updates is None) == (not force):
+        raise ValueError("Pass exactly one of `updates` (fields to change) or `force=True` (redeploy unchanged).")
+    service = _get_client(host).services.get(id_or_name)
+    if force:
+        service.force_update()
+        return True
+    service.update(**cast(dict, updates))
     return True
 
 
 @tool()
-def remove_service(service_id: str, host: str | None = None) -> bool:
+def service_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Stop and remove a swarm service.
 
-    args: service_id - The service id or name
+    args: id_or_name - The service id or name
     returns: bool - True after the service is removed
     """
-    _get_client(host).services.get(service_id).remove()
+    _get_client(host).services.get(id_or_name).remove()
     return True
 
 
 @tool()
-def service_tasks(service_id: str, filters: dict | None = None, host: str | None = None) -> list:
+def service_ps(id_or_name: str, filters: dict | None = None, host: str | None = None) -> list:
     """
     List the tasks of a swarm service.
 
     args:
-        service_id - The service id or name
+        id_or_name - The service id or name
         filters - Filter by id, name, node, label, desired-state
     returns: list - A list of task dicts
     """
-    service = _get_client(host).services.get(service_id)
+    service = _get_client(host).services.get(id_or_name)
     return service.tasks(filters=filters)
 
 
 @tool()
 def service_logs(
-    service_id: str,
+    id_or_name: str,
     details: bool = False,
     stdout: bool = True,
     stderr: bool = True,
     since: int = 0,
     timestamps: bool = False,
-    tail: int | Literal["all"] = "all",
+    tail: int | Literal["all"] = 200,
     max_bytes: int = MAX_PAYLOAD_BYTES,
     host: str | None = None,
 ) -> str:
@@ -125,22 +136,22 @@ def service_logs(
 
     `follow` is intentionally not exposed: the stream is joined into one string before returning, so
     following would block forever and grow unbounded. Collection is capped at `max_bytes` (ValueError
-    if exceeded) so a noisy service can't OOM the server. The default `tail="all"` returns the whole
-    buffer, which can be huge on long-running services and exceed the agent's context — pass an
-    integer (e.g. `tail=500`) or use `since` to constrain output.
+    if exceeded) so a noisy service can't OOM the server. The default is a bounded `tail=200`;
+    `tail="all"` returns the whole buffer, which can be huge on long-running services and exceed
+    the agent's context — prefer an integer, or `since`, to constrain output.
 
     args:
-        service_id - The service id or name
+        id_or_name - The service id or name
         details - Show extra details
         stdout - Include stdout
         stderr - Include stderr
         since - Show logs since this Unix timestamp
         timestamps - Include timestamps
-        tail - Number of lines from the end, or the literal "all"
+        tail - Number of lines from the end (default 200), or the literal "all" for everything
         max_bytes - Abort with ValueError if the buffered logs exceed this many bytes (default 32 MiB)
     returns: str - Decoded log output
     """
-    service = _get_client(host).services.get(service_id)
+    service = _get_client(host).services.get(id_or_name)
     output = service.logs(
         details=details,
         follow=False,
@@ -155,55 +166,43 @@ def service_logs(
         for chunk in chunks:
             yield chunk if isinstance(chunk, bytes) else str(chunk).encode("utf-8", errors="replace")
 
-    raw = join_bounded(_as_bytes(cast(Iterable, output)), max_bytes, f"logs of service {service_id}")
+    raw = join_bounded(_as_bytes(cast(Iterable, output)), max_bytes, f"logs of service {id_or_name}")
     return raw.decode("utf-8", errors="replace")
 
 
 @tool()
-def scale_service(service_id: str, replicas: int, host: str | None = None) -> bool:
+def service_scale(id_or_name: str, replicas: int, host: str | None = None) -> bool:
     """
     Scale a swarm service to a number of replicas.
 
     args:
-        service_id - The service id or name
+        id_or_name - The service id or name
         replicas - The desired number of replicas
     returns: bool - True after scaling
     """
-    return _get_client(host).services.get(service_id).scale(replicas)
+    return _get_client(host).services.get(id_or_name).scale(replicas)
 
 
 @tool()
-def force_update_service(service_id: str, host: str | None = None) -> bool:
-    """
-    Force update a swarm service even if its config has not changed.
-
-    args: service_id - The service id or name
-    returns: bool - True after the force update
-    """
-    _get_client(host).services.get(service_id).force_update()
-    return True
-
-
-@tool()
-def rollback_service(service_id: str, host: str | None = None) -> dict:
+def service_rollback(id_or_name: str, host: str | None = None) -> dict:
     """
     Roll a swarm service back to its previous spec (the docker `service rollback` equivalent).
 
-    Re-applies the service's `PreviousSpec` — the spec from before the most recent `update_service` /
-    `scale_service` / `force_update_service`. Raises ValueError if the service has no PreviousSpec
+    Re-applies the service's `PreviousSpec` — the spec from before the most recent `service_update` /
+    `service_scale`. Raises ValueError if the service has no PreviousSpec
     (it has never been updated, or was already rolled back). The high-level SDK exposes no rollback,
     so this reads the current version and previous spec via the low-level APIClient and submits them
-    with `update_service`.
+    with the low-level `update_service` API call.
 
-    args: service_id - The service id or name
+    args: id_or_name - The service id or name
     returns: dict - The daemon response (a dict with a "Warnings" key)
     """
     api = _get_client(host).api
-    info = api.inspect_service(service_id)
+    info = api.inspect_service(id_or_name)
     previous = info.get("PreviousSpec")
     if not previous:
         raise ValueError(
-            f"Service {service_id} has no PreviousSpec to roll back to (never updated, or already rolled back)."
+            f"Service {id_or_name} has no PreviousSpec to roll back to (never updated, or already rolled back)."
         )
     version = info["Version"]["Index"]
     # fetch_current_spec=False is the docker-py default, but pass it explicitly: rollback must *replace*
@@ -211,7 +210,7 @@ def rollback_service(service_id: str, host: str | None = None) -> dict:
     # daemon-side base is empty, so fields absent from PreviousSpec are genuinely unset (the intended
     # rollback), not silently carried over from the spec we're rolling away from.
     return api.update_service(
-        service_id,
+        id_or_name,
         version,
         task_template=previous.get("TaskTemplate"),
         name=previous.get("Name"),

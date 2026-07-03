@@ -1,12 +1,14 @@
 # library of mcp tools relating to image management
 
+from typing import cast
+
 from docker_mcp.server import tool
 from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, host_read_path, join_bounded, stream_to_file
-from docker_mcp.tools.client import _get_client
+from docker_mcp.tools.system import _get_client
 
 
 @tool()
-def build_image(
+def image_build(
     path: str | None = None,
     tag: str | None = None,
     quiet: bool = False,
@@ -50,7 +52,7 @@ def build_image(
         buildargs - Build-time variables passed as `--build-arg`; dict of str→str
         container_limits - Resource limits for the build container, e.g. {"memory": 134217728}
         shmsize - Size of /dev/shm in bytes for build steps that need shared memory
-        labels - Labels to apply to the resulting image; dict of str→str
+        labels - Labels to set on the resulting image (dict of str→str)
         cache_from - List of image references to use as layer cache sources
         target - Stop at this named build stage (multi-stage Dockerfiles)
         network_mode - Network mode for RUN instructions during build (e.g. "host", "none")
@@ -90,51 +92,54 @@ def build_image(
 
 
 @tool()
-def get_image(name: str, host: str | None = None) -> dict:
+def image_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get an image by name or id.
 
-    args: name - The image name or id
+    args: id_or_name - The image name or id
     returns: dict - The image's attrs
     """
-    return _get_client(host).images.get(name).attrs
+    return _get_client(host).images.get(id_or_name).attrs
 
 
 @tool()
-def get_registry_data(name: str, auth_config: dict | None = None, host: str | None = None) -> dict:
+def image_registry_data(repository: str, auth_config: dict | None = None, host: str | None = None) -> dict:
     """
-    Get registry data for an image without pulling it.
+    Get registry data for an image without pulling it, via the daemon's distribution endpoint.
+
+    Uses the daemon (and its cached credentials) to resolve the remote descriptor and platform
+    list. For direct registry access without a daemon use `registry_manifest`.
 
     Security: `auth_config` carries registry credentials, which many MCP clients log verbatim. Prefer
     `docker login` on the host so the `docker` module reuses credentials cached in
     `~/.docker/config.json`, and leave `auth_config` unset.
 
     args:
-        name - Image reference
+        repository - Image reference
         auth_config - Optional registry authentication config
     returns: dict - Registry data attrs
     """
-    return _get_client(host).images.get_registry_data(name, auth_config=auth_config).attrs
+    return _get_client(host).images.get_registry_data(repository, auth_config=auth_config).attrs
 
 
 @tool()
-def list_images(
-    name: str | None = None, all: bool = False, filters: dict | None = None, host: str | None = None
+def image_list(
+    repository: str | None = None, all: bool = False, filters: dict | None = None, host: str | None = None
 ) -> list:
     """
     List images on the server.
 
     args:
-        name - Only show images of this repository
+        repository - Only show images of this repository
         all - Show intermediate image layers
         filters - Filter by attributes (label, dangling, before, since, etc.)
     returns: list - A list of image attrs dicts
     """
-    return [i.attrs for i in _get_client(host).images.list(name=name, all=all, filters=filters)]
+    return [i.attrs for i in _get_client(host).images.list(name=repository, all=all, filters=filters)]
 
 
 @tool()
-def pull_image(
+def image_pull(
     repository: str,
     tag: str | None = None,
     all_tags: bool = False,
@@ -142,7 +147,7 @@ def pull_image(
     host: str | None = None,
 ) -> dict | list:
     """
-    Pull an image of the given name.
+    Pull an image from a registry to the daemon's local store.
 
     args:
         repository - The image repository
@@ -158,7 +163,7 @@ def pull_image(
 
 
 @tool()
-def push_image(
+def image_push(
     repository: str, tag: str | None = None, auth_config: dict | None = None, host: str | None = None
 ) -> str:
     """
@@ -181,33 +186,33 @@ def push_image(
 
 
 @tool()
-def remove_image(image: str, force: bool = False, noprune: bool = False, host: str | None = None) -> bool:
+def image_remove(id_or_name: str, force: bool = False, noprune: bool = False, host: str | None = None) -> bool:
     """
     Remove a local image by name or id.
 
     Fails without `force` if the image is tagged by multiple names (untag first with
-    `tag_image`) or if stopped containers reference it. Running containers always block
+    `image_tag`) or if stopped containers reference it. Running containers always block
     removal regardless of `force`. `noprune` keeps untagged parent layers that would
     otherwise be removed as a side-effect; leave False unless you need to preserve
     the parent layers for another purpose.
 
     args:
-        image - Image name (with optional tag/digest) or id to remove
+        id_or_name - Image name (with optional tag/digest) or id to remove
         force - Remove even if referenced by stopped containers or multiple tags
         noprune - Do not delete untagged intermediate parent layers
     returns: bool - True after removal completes
     """
-    _get_client(host).images.remove(image=image, force=force, noprune=noprune)
+    _get_client(host).images.remove(image=id_or_name, force=force, noprune=noprune)
     return True
 
 
 @tool()
-def search_images(term: str, limit: int | None = None, host: str | None = None) -> list:
+def image_search(term: str, limit: int | None = None, host: str | None = None) -> list:
     """
     Search Docker Hub for public images matching a term.
 
     Searches Docker Hub only — not GHCR, ECR, or other registries. For listing tags on a
-    specific image from any OCI registry use `registry_list_tags` instead. Each result dict
+    specific image from any OCI registry use `registry_tags` instead. Each result dict
     includes `name`, `description`, `star_count`, `is_official`, and `is_automated`.
 
     args:
@@ -219,7 +224,7 @@ def search_images(term: str, limit: int | None = None, host: str | None = None) 
 
 
 @tool()
-def prune_images(filters: dict | None = None, host: str | None = None) -> dict:
+def image_prune(filters: dict | None = None, host: str | None = None) -> dict:
     """
     Remove unused local images to reclaim disk space.
 
@@ -227,7 +232,7 @@ def prune_images(filters: dict | None = None, host: str | None = None) -> dict:
     tag or container. To remove all images not used by any container (including tagged ones)
     pass `filters={"dangling": False}`. Valid filter keys: `dangling` (bool as string
     "true"/"false"), `until` (RFC3339 timestamp or duration like "24h"), `label`
-    (key or key=value). Use `df` first to see how much space is reclaimable.
+    (key or key=value). Use `system_df` first to see how much space is reclaimable.
 
     args: filters - Narrow which images to remove; omit to remove dangling images only
     returns: dict - {"ImagesDeleted": [...], "SpaceReclaimed": <bytes>}
@@ -236,93 +241,81 @@ def prune_images(filters: dict | None = None, host: str | None = None) -> dict:
 
 
 @tool()
-def load_image(data: bytes, host: str | None = None) -> list:
+def image_load(data: bytes | None = None, from_file: str | None = None, host: str | None = None) -> list:
     """
-    Load an image from a tarball produced by save_image.
+    Load an image from a tarball produced by image_save, from in-band bytes or a file on the server host.
 
-    For a tarball already on the host running this server, prefer `load_image_from_file` — it streams
-    from disk instead of carrying the (base64-encoded) bytes through the MCP protocol.
+    Pass exactly one of `data` (tarball bytes in band) or `from_file` (a path on the server host,
+    streamed straight to the daemon — preferred for anything but small images, since in-band bytes are
+    base64-encoded by MCP). `from_file` is read by the server's user; `~` is expanded.
 
-    args: data - Tarball contents
+    args:
+        data - Tarball contents; exactly one of data/from_file
+        from_file - Path to a tarball produced by `docker save` / `image_save`; exactly one of data/from_file
     returns: list - A list of loaded image attrs dicts
     """
-    return [i.attrs for i in _get_client(host).images.load(data)]
-
-
-@tool()
-def load_image_from_file(file_path: str, host: str | None = None) -> list:
-    """
-    Load an image from a tar archive on the host running this MCP server.
-
-    Streams the file straight to the daemon, so it handles arbitrarily large images that would be
-    impractical to pass in band via `load_image`. The path is read by the server's user; `~` is expanded.
-
-    args: file_path - Path to a tarball produced by `docker save` / `save_image_to_file`
-    returns: list - A list of loaded image attrs dicts
-    """
-    path = host_read_path(file_path)
+    if (data is None) == (from_file is None):
+        raise ValueError("Pass exactly one of `data` (in-band tarball bytes) or `from_file` (a server-host path).")
+    if data is not None:
+        return [i.attrs for i in _get_client(host).images.load(data)]
+    path = host_read_path(cast(str, from_file))
     with path.open("rb") as handle:
         return [i.attrs for i in _get_client(host).images.load(handle)]
 
 
 @tool()
-def save_image(name: str, named: bool = False, max_bytes: int = MAX_PAYLOAD_BYTES, host: str | None = None) -> bytes:
+def image_save(
+    id_or_name: str,
+    dest_path: str | None = None,
+    named: bool = False,
+    overwrite: bool = False,
+    max_bytes: int = MAX_PAYLOAD_BYTES,
+    host: str | None = None,
+) -> bytes | dict:
     """
-    Save an image as a tar archive, returned in band.
+    Save an image as a tar archive: to a file on the server host, or in band.
 
-    For anything but a small image prefer `save_image_to_file`, which streams to a host path; the
-    in-band bytes here are capped (default 32 MiB) because MCP base64-encodes them into the agent's context.
+    With `dest_path` the archive streams straight to disk (no byte cap), so it handles large images —
+    the file is written by the server's user, `~` is expanded, and an existing file is refused unless
+    `overwrite=True`. Without `dest_path` the tar bytes are returned in band, capped at `max_bytes`
+    (default 32 MiB) because MCP base64-encodes them — a fallback for when no writable host path
+    exists (e.g. a containerized server without a bind mount).
 
     args:
-        name - Image name or id
-        named - Whether to keep the image name when saving
-        max_bytes - Abort with ValueError if the tarball exceeds this many bytes (defaults to 32 MiB)
-    returns: bytes - The tarball contents
-    """
-    image = _get_client(host).images.get(name)
-    return join_bounded(image.save(named=named), max_bytes, f"save of image {name}")
-
-
-@tool()
-def save_image_to_file(
-    name: str, dest_path: str, named: bool = False, overwrite: bool = False, host: str | None = None
-) -> dict:
-    """
-    Save an image as a tar archive written to a file on the host running this MCP server.
-
-    Streams the archive straight to disk (no in-band byte cap), so it handles large images. The file
-    is written by the server's user; `~` is expanded and an existing file is refused unless `overwrite=True`.
-
-    args:
-        name - Image name or id
-        dest_path - Destination path on the server host for the tarball
-        named - Whether to keep the image name when saving
+        id_or_name - Image name or id
+        dest_path - Destination path on the server host; omit to return the bytes in band
+        named - Whether to retain repository/tag names in the saved archive
         overwrite - Replace dest_path if it already exists (default False)
-    returns: dict - {"path": <resolved path>, "bytes_written": int}
+        max_bytes - In-band mode: abort with ValueError beyond this many bytes (default 32 MiB)
+    returns: bytes | dict - the tarball bytes (in band), or {"path": <resolved path>, "bytes_written": int}
     """
-    image = _get_client(host).images.get(name)
+    image = _get_client(host).images.get(id_or_name)
+    if dest_path is None:
+        return join_bounded(image.save(named=named), max_bytes, f"save of image {id_or_name}")
     path, written = stream_to_file(image.save(named=named), dest_path, overwrite=overwrite)
     return {"path": str(path), "bytes_written": written}
 
 
 @tool()
-def tag_image(name: str, repository: str, tag: str | None = None, force: bool = False, host: str | None = None) -> bool:
+def image_tag(
+    id_or_name: str, repository: str, tag: str | None = None, force: bool = False, host: str | None = None
+) -> bool:
     """
     Tag an image into a repository.
 
     args:
-        name - The source image name or id
+        id_or_name - The source image name or id
         repository - Target repository name
         tag - Optional tag for the new image
         force - Force the tag
     returns: bool - True if the image was tagged
     """
-    image = _get_client(host).images.get(name)
+    image = _get_client(host).images.get(id_or_name)
     return image.tag(repository, tag=tag, force=force)
 
 
 @tool()
-def image_history(name: str, host: str | None = None) -> list:
+def image_history(id_or_name: str, host: str | None = None) -> list:
     """
     Return the layer history of an image.
 
@@ -330,9 +323,9 @@ def image_history(name: str, host: str | None = None) -> list:
     includes `Id` (layer digest or "<missing>" for imported layers), `Created` (unix
     timestamp), `CreatedBy` (the Dockerfile command that produced the layer, e.g. a RUN or
     COPY), `Size` (bytes added by that layer), and `Comment`. For full image metadata use
-    `get_image` instead.
+    `image_inspect` instead.
 
-    args: name - Image name (with optional tag/digest) or id
+    args: id_or_name - Image name (with optional tag/digest) or id
     returns: list - Layer history entries, newest first
     """
-    return _get_client(host).images.get(name).history()
+    return _get_client(host).images.get(id_or_name).history()

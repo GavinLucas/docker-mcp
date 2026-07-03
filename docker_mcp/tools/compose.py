@@ -7,6 +7,8 @@
 # (`-T`, `--no-follow`) so they can't block the MCP server. To stream logs or
 # attach, use the host CLI directly.
 
+from typing import Literal
+
 from docker_mcp.server import tool
 from docker_mcp.tools._cli import (
     CliResult,
@@ -179,7 +181,7 @@ def compose_logs(
     files: list[str] | None = None,
     project_name: str | None = None,
     services: list[str] | None = None,
-    tail: int = 200,
+    tail: int | Literal["all"] = 200,
     since: str | None = None,
     until: str | None = None,
     timestamps: bool = False,
@@ -193,17 +195,14 @@ def compose_logs(
         files - Explicit compose file paths (repeatable, `-f`)
         project_name - Compose project name override
         services - Restrict to these services (default: all)
-        tail - Lines per container (default 200; 0 = all, still capped at MAX_CLI_OUTPUT_BYTES)
+        tail - Lines per container (default 200), or the literal "all" (still capped at MAX_CLI_OUTPUT_BYTES)
         since - Show logs since this timestamp/duration (e.g. "10m", "2024-01-01T00:00:00")
         until - Show logs before this timestamp/duration
         timestamps - Include per-line timestamps
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
     args = [*_global_args(files, project_name, None), "logs", "--no-color", "--no-log-prefix"]
-    if tail and tail > 0:
-        args.extend(["--tail", str(tail)])
-    elif tail == 0:
-        args.extend(["--tail", "all"])
+    args.extend(["--tail", str(tail)])
     if since:
         args.extend(["--since", since])
     if until:
@@ -305,13 +304,13 @@ def compose_pull(
 
     Use this to stage images before an outage window, to refresh cached images before
     `compose_up`, or to verify images are accessible without starting containers. For
-    registry-authenticated pulls ensure the daemon is logged in first with `login`.
+    registry-authenticated pulls ensure the daemon is logged in first with `system_login`.
     `compose_up --pull always` does the same as part of startup; use this tool when you
     want to separate the pull step.
 
     args:
-        project_dir - Dir containing the compose file (default: server cwd)
-        files - Explicit compose file paths, passed as `-f` (overrides auto-discovery)
+        project_dir - Dir with the compose file (default: server cwd)
+        files - Explicit compose file paths (repeatable, `-f`; overrides auto-discovery)
         project_name - Override the compose project name
         services - Pull only these services; omit to pull all
         ignore_pull_failures - Continue if an individual image pull fails
@@ -345,8 +344,8 @@ def compose_restart(
     `stop_timeout_seconds` controls the SIGTERM grace period before Docker sends SIGKILL.
 
     args:
-        project_dir - Dir containing the compose file (default: server cwd)
-        files - Explicit compose file paths, passed as `-f`
+        project_dir - Dir with the compose file (default: server cwd)
+        files - Explicit compose file paths (repeatable, `-f`)
         project_name - Override the compose project name
         services - Restart only these services; omit to restart all
         stop_timeout_seconds - Seconds to wait for graceful stop before SIGKILL
@@ -496,7 +495,7 @@ def compose_exec(
     host: str | None = None,
 ) -> dict:
     """
-    Run a command inside an already-running compose service container.
+    Run a command inside an already-running compose service container (see also `container_exec`).
 
     Always passes `-T` (no TTY). Pass an exec-form argv (e.g. `["python", "-V"]`); a
     `["sh", "-c", "..."]` form interprets shell metacharacters in untrusted substrings.
@@ -791,7 +790,7 @@ def compose_unpause(
 
 
 @tool()
-def compose_ls(all: bool = False, host: str | None = None) -> list:
+def compose_list(all: bool = False, host: str | None = None) -> list:
     """
     List compose projects known to the daemon (across all directories).
 

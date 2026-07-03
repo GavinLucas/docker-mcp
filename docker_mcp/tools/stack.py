@@ -5,12 +5,13 @@
 # probe — but every subcommand requires the target daemon to be a swarm manager and will fail
 # otherwise. These tools shell out via the cross-platform helper in `tools/_cli.py`.
 #
-# Error convention (see CLAUDE.md): action tools (`stack_deploy`, `stack_rm`) return the raw
-# CliResult dict and never raise; parsed-query tools (`stack_ls`, `stack_ps`, `stack_services`)
+# Error convention (see CLAUDE.md): action tools (`stack_deploy`, `stack_remove`) return the raw
+# CliResult dict and never raise; parsed-query tools (`stack_list`, `stack_ps`, `stack_services`)
 # return a parsed list and raise RuntimeError via `raise_on_cli_failure` on a non-zero exit.
 
 from docker_mcp.server import tool
 from docker_mcp.tools._cli import (
+    filter_args,
     parse_json_or_ndjson,
     raise_on_cli_failure,
     run_docker,
@@ -45,7 +46,7 @@ def _parse_stack_list(stdout: str, *, truncated: bool, what: str) -> list[dict]:
 
 @tool()
 def stack_deploy(
-    stack_name: str,
+    name: str,
     compose_files: list[str],
     with_registry_auth: bool = False,
     prune: bool = False,
@@ -58,12 +59,12 @@ def stack_deploy(
     """
     Deploy (or update) a stack to the swarm from one or more Compose files.
 
-    Requires the target daemon to be a swarm manager. Re-running with the same `stack_name` updates
+    Requires the target daemon to be a swarm manager. Re-running with the same `name` updates
     the stack in place. Defaults to `detach=True` (returns once specs are submitted, not on
     convergence); set `detach=False` to wait for the rollout (give it a generous `timeout_seconds`).
 
     args:
-        stack_name - Name of the stack to create or update
+        name - Name of the stack to create or update
         compose_files - One or more Compose file paths (repeated `-c`; later override earlier). At least one required.
         with_registry_auth - Send registry credentials to swarm agents (needed for private images)
         prune - Remove services no longer defined in the Compose file
@@ -87,12 +88,12 @@ def stack_deploy(
     if resolve_image is not None:
         args.append(f"--resolve-image={resolve_image}")
     args.append(f"--detach={'true' if detach else 'false'}")
-    args.append(safe_positional(stack_name, "stack name"))
+    args.append(safe_positional(name, "stack name"))
     return run_docker(args, cwd=cwd, timeout=timeout_seconds, host=host).to_dict()
 
 
 @tool()
-def stack_ls(host: str | None = None) -> list:
+def stack_list(host: str | None = None) -> list:
     """
     List the stacks deployed to the swarm, parsed from `--format '{{json .}}'`.
 
@@ -106,51 +107,47 @@ def stack_ls(host: str | None = None) -> list:
 
 
 @tool()
-def stack_ps(
-    stack_name: str, no_trunc: bool = False, filters: list[str] | None = None, host: str | None = None
-) -> list:
+def stack_ps(name: str, no_trunc: bool = False, filters: dict | None = None, host: str | None = None) -> list:
     """
     List the tasks of a stack, parsed from `--format '{{json .}}'`.
 
     args:
-        stack_name - The stack to list tasks for
+        name - The stack to list tasks for
         no_trunc - Do not truncate task IDs / errors in the output
-        filters - Repeatable `--filter` expressions, e.g. ["desired-state=running"]
+        filters - Filter by attributes, e.g. {"desired-state": "running"}; a list value repeats the filter
     returns: list - One dict per task (id, name, node, image, desired/current state, error)
     """
     args = ["stack", "ps", "--format", _JSON_FORMAT]
     if no_trunc:
         args.append("--no-trunc")
-    for f in filters or []:
-        args.extend(["--filter", f])
-    args.append(safe_positional(stack_name, "stack name"))
+    args.extend(filter_args(filters))
+    args.append(safe_positional(name, "stack name"))
     result = run_docker(args, timeout=_TIMEOUT_QUERY, host=host)
     raise_on_cli_failure(result, "stack ps")
     return _parse_stack_list(result.stdout, truncated=result.truncated, what="stack ps output")
 
 
 @tool()
-def stack_services(stack_name: str, filters: list[str] | None = None, host: str | None = None) -> list:
+def stack_services(name: str, filters: dict | None = None, host: str | None = None) -> list:
     """
     List the services of a stack, parsed from `--format '{{json .}}'`.
 
     args:
-        stack_name - The stack to list services for
-        filters - Repeatable `--filter` expressions, e.g. ["name=web"]
+        name - The stack to list services for
+        filters - Filter by attributes, e.g. {"name": "web"}; a list value repeats the filter
     returns: list - One dict per service (id, name, mode, replicas, image, ports)
     """
     args = ["stack", "services", "--format", _JSON_FORMAT]
-    for f in filters or []:
-        args.extend(["--filter", f])
-    args.append(safe_positional(stack_name, "stack name"))
+    args.extend(filter_args(filters))
+    args.append(safe_positional(name, "stack name"))
     result = run_docker(args, timeout=_TIMEOUT_QUERY, host=host)
     raise_on_cli_failure(result, "stack services")
     return _parse_stack_list(result.stdout, truncated=result.truncated, what="stack services output")
 
 
 @tool()
-def stack_rm(
-    stack_names: list[str], detach: bool = True, timeout_seconds: float = _TIMEOUT_RM, host: str | None = None
+def stack_remove(
+    names: list[str], detach: bool = True, timeout_seconds: float = _TIMEOUT_RM, host: str | None = None
 ) -> dict:
     """
     Remove one or more stacks from the swarm (tears down their services, networks, and secrets).
@@ -159,13 +156,13 @@ def stack_rm(
     `detach=True` so the call returns once removal is requested rather than waiting for teardown.
 
     args:
-        stack_names - One or more stack names to remove. At least one is required.
+        names - One or more stack names to remove. At least one is required.
         detach - Return immediately (True) vs wait for the stack(s) to be fully removed (False)
         timeout_seconds - Subprocess timeout (default 300s)
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
-    if not stack_names:
-        raise ValueError("stack_rm requires at least one entry in stack_names.")
+    if not names:
+        raise ValueError("stack_remove requires at least one entry in names.")
     args = ["stack", "rm", f"--detach={'true' if detach else 'false'}"]
-    args.extend(safe_positional(name, "stack name") for name in stack_names)
+    args.extend(safe_positional(name, "stack name") for name in names)
     return run_docker(args, timeout=timeout_seconds, host=host).to_dict()

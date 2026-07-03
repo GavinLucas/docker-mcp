@@ -3,11 +3,11 @@
 from docker_mcp.server import tool
 from docker_mcp.tools._labels import managed_filter, with_provenance
 from docker_mcp.tools._utils import drop_none
-from docker_mcp.tools.client import _get_client
+from docker_mcp.tools.system import _get_client
 
 
 @tool()
-def create_network(
+def network_create(
     name: str,
     driver: str | None = None,
     options: dict | None = None,
@@ -46,7 +46,7 @@ def create_network(
             options=options,
             ipam=ipam,
             check_duplicate=check_duplicate,
-            labels=with_provenance(labels, "create_network"),
+            labels=with_provenance(labels, "network_create"),
             attachable=attachable,
             scope=scope,
             ingress=ingress,
@@ -56,18 +56,18 @@ def create_network(
 
 
 @tool()
-def get_network(network_id: str, host: str | None = None) -> dict:
+def network_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get a network by id or name.
 
-    args: network_id - The network id or name
+    args: id_or_name - The network id or name
     returns: dict - The network's attrs
     """
-    return _get_client(host).networks.get(network_id).attrs
+    return _get_client(host).networks.get(id_or_name).attrs
 
 
 @tool()
-def list_networks(
+def network_list(
     names: list | None = None,
     ids: list | None = None,
     filters: dict | None = None,
@@ -94,7 +94,7 @@ def list_networks(
 
 
 @tool()
-def prune_networks(filters: dict | None = None, host: str | None = None) -> dict:
+def network_prune(filters: dict | None = None, host: str | None = None) -> dict:
     """
     Remove networks that have no active container endpoints.
 
@@ -109,20 +109,20 @@ def prune_networks(filters: dict | None = None, host: str | None = None) -> dict
 
 
 @tool()
-def remove_network(network_id: str, host: str | None = None) -> bool:
+def network_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Remove a network.
 
-    args: network_id - The network id or name
+    args: id_or_name - The network id or name
     returns: bool - True after removal
     """
-    _get_client(host).networks.get(network_id).remove()
+    _get_client(host).networks.get(id_or_name).remove()
     return True
 
 
 @tool()
-def connect_network(
-    network_id: str,
+def network_connect(
+    id_or_name: str,
     container: str,
     aliases: list | None = None,
     links: list | None = None,
@@ -139,11 +139,11 @@ def connect_network(
     `aliases` sets extra DNS names for this container within the network (other containers
     can reach it by those names in addition to its container name). `ipv4_address` /
     `ipv6_address` assign a specific IP on the network; omit to let the driver assign one.
-    `links` is a legacy feature (deprecated; prefer DNS aliases). Use `disconnect_network`
+    `links` is a legacy feature (deprecated; prefer DNS aliases). Use `network_disconnect`
     to undo.
 
     args:
-        network_id - Network id or name to connect the container to
+        id_or_name - Network id or name to connect the container to
         container - Container id or name to attach
         aliases - Additional DNS names for this container within the network
         links - Legacy container links (deprecated)
@@ -153,7 +153,7 @@ def connect_network(
         driver_opt - Driver-specific endpoint options
     returns: bool - True after the container is connected
     """
-    network = _get_client(host).networks.get(network_id)
+    network = _get_client(host).networks.get(id_or_name)
     network.connect(
         container,
         aliases=aliases,
@@ -167,16 +167,16 @@ def connect_network(
 
 
 @tool()
-def disconnect_network(network_id: str, container: str, force: bool = False, host: str | None = None) -> bool:
+def network_disconnect(id_or_name: str, container: str, force: bool = False, host: str | None = None) -> bool:
     """
     Disconnect a container from a network.
 
     args:
-        network_id - The network id or name
+        id_or_name - The network id or name
         container - The container id or name
         force - Force disconnect
     returns: bool - True after the container is disconnected
     """
-    network = _get_client(host).networks.get(network_id)
+    network = _get_client(host).networks.get(id_or_name)
     network.disconnect(container, force=force)
     return True

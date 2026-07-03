@@ -3,11 +3,11 @@
 from docker_mcp.server import tool
 from docker_mcp.tools._labels import with_provenance
 from docker_mcp.tools._utils import drop_none
-from docker_mcp.tools.client import _get_client
+from docker_mcp.tools.system import _get_client
 
 
 @tool()
-def create_secret(
+def secret_create(
     name: str, data: bytes, labels: dict | None = None, driver: dict | None = None, host: str | None = None
 ) -> dict:
     """
@@ -16,31 +16,31 @@ def create_secret(
     args:
         name - The name of the secret
         data - The secret payload
-        labels - Labels to apply
+        labels - Labels to set on the secret
         driver - Optional secret driver configuration
     returns: dict - The created secret's attrs
     """
     kwargs: dict = {
         "name": name,
         "data": data,
-        **drop_none(labels=with_provenance(labels, "create_secret"), driver=driver),
+        **drop_none(labels=with_provenance(labels, "secret_create"), driver=driver),
     }
     return _get_client(host).secrets.create(**kwargs).attrs
 
 
 @tool()
-def get_secret(secret_id: str, host: str | None = None) -> dict:
+def secret_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a swarm secret by id.
+    Get a swarm secret by id or name.
 
-    args: secret_id - The secret id
+    args: id_or_name - The secret id or name
     returns: dict - The secret's attrs
     """
-    return _get_client(host).secrets.get(secret_id).attrs
+    return _get_client(host).secrets.get(id_or_name).attrs
 
 
 @tool()
-def list_secrets(filters: dict | None = None, host: str | None = None) -> list:
+def secret_list(filters: dict | None = None, host: str | None = None) -> list:
     """
     List swarm secrets.
 
@@ -51,19 +51,18 @@ def list_secrets(filters: dict | None = None, host: str | None = None) -> list:
 
 
 @tool()
-def remove_secret(secret_id: str, host: str | None = None) -> bool:
+def secret_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Remove a Swarm secret; requires a swarm manager.
 
     Removing a secret does not immediately affect running service tasks — tasks that already
     have the secret mounted retain access until they are restarted or the service is updated.
-    Use `list_services` and inspect each service's spec via `get_service` to identify
+    Use `service_list` and inspect each service's spec via `service_inspect` to identify
     services that mount the secret before removing it (service filters do not support
-    filtering by secret reference). The secret id (not name) is required; retrieve it from `list_secrets`
-    or `get_secret`.
+    filtering by secret reference).
 
-    args: secret_id - The secret id to remove
+    args: id_or_name - The secret id or name to remove
     returns: bool - True after removal
     """
-    _get_client(host).secrets.get(secret_id).remove()
+    _get_client(host).secrets.get(id_or_name).remove()
     return True

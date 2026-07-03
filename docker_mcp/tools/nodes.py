@@ -2,11 +2,11 @@
 
 from docker_mcp.server import tool
 from docker_mcp.tools._utils import drop_none
-from docker_mcp.tools.client import _get_client
+from docker_mcp.tools.system import _get_client
 
 
 @tool()
-def get_node(id_or_name: str, host: str | None = None) -> dict:
+def node_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get a swarm node by id or name.
 
@@ -17,7 +17,7 @@ def get_node(id_or_name: str, host: str | None = None) -> dict:
 
 
 @tool()
-def list_nodes(filters: dict | None = None, host: str | None = None) -> list:
+def node_list(filters: dict | None = None, host: str | None = None) -> list:
     """
     List swarm nodes.
 
@@ -28,32 +28,36 @@ def list_nodes(filters: dict | None = None, host: str | None = None) -> list:
 
 
 @tool()
-def update_node(id_or_name: str, node_spec: dict, host: str | None = None) -> bool:
+def node_update(id_or_name: str, spec: dict, host: str | None = None) -> bool:
     """
-    Update a node's spec (availability, name, role, labels).
+    Replace a node's spec (availability, name, role, labels).
+
+    Replacement, not a merge: `spec` becomes the node's entire spec, and omitted keys are cleared.
+    Fetch the current spec via `node_inspect` (its `Spec` key), modify it, and resubmit the whole
+    dict — e.g. sending just {"Availability": "drain"} would also wipe the node's role and labels.
 
     args:
         id_or_name - The node id or name
-        node_spec - The new node spec
+        spec - The complete new node spec (see description — omitted keys are cleared)
     returns: bool - True after the update
     """
     node = _get_client(host).nodes.get(id_or_name)
-    node.update(node_spec)
+    node.update(spec)
     return True
 
 
 @tool()
-def remove_node(node_id: str, force: bool = False, host: str | None = None) -> bool:
+def node_remove(id_or_name: str, force: bool = False, host: str | None = None) -> bool:
     """
     Remove a node from the swarm.
 
-    A node should normally be drained (`update_node` with Availability "drain") and have left the
+    A node should normally be drained (`node_update` with Availability "drain") and have left the
     swarm first, so its tasks reschedule cleanly. Removing an active/reachable node requires `force=True`.
 
     args:
-        node_id - The node id or name to remove
+        id_or_name - The node id or name to remove
         force - Force removal of an active/reachable node
     returns: bool - True after the node is removed
     """
-    _get_client(host).nodes.get(node_id).remove(force=force)
+    _get_client(host).nodes.get(id_or_name).remove(force=force)
     return True

@@ -7,6 +7,7 @@
 from docker_mcp.server import tool
 from docker_mcp.tools._cli import (
     CliResult,
+    filter_args,
     parse_json_or_ndjson,
     parse_ndjson,
     raise_on_cli_failure,
@@ -60,7 +61,7 @@ def buildx_build(
     """
     Build an image with BuildKit via `docker buildx build`.
 
-    Replaces the legacy `build_image` tool when you need any of: multi-platform output
+    Replaces the legacy `image_build` tool when you need any of: multi-platform output
     (`platforms`), modern cache export (`cache_from`/`cache_to`), SBOM or provenance
     attestations, build secrets, or multi-stage builds with `target`. Always runs with
     `--progress=plain` so output is captured rather than redrawn on a TTY.
@@ -74,7 +75,7 @@ def buildx_build(
         file - Dockerfile path (relative to context unless absolute)
         build_args - Build-time variables (each becomes `--build-arg KEY=VALUE`)
         build_contexts - Additional named build contexts (e.g. {"deps": "./vendor"})
-        labels - Image labels (each becomes `--label KEY=VALUE`)
+        labels - Labels to set on the resulting image (each becomes `--label KEY=VALUE`)
         annotations - OCI manifest annotations (passed verbatim, repeatable)
         target - Target build stage to stop at
         push - Push the result to the registry (mutually exclusive with `load`)
@@ -224,7 +225,9 @@ def buildx_imagetools_inspect(
     Replaces `docker manifest inspect`. The standalone `docker manifest` command is in
     maintenance mode and lacks support for OCI image indexes, attestations, and
     annotations — `buildx imagetools inspect` is the path forward and handles both
-    single-platform manifests and multi-platform manifest lists / OCI indexes.
+    single-platform manifests and multi-platform manifest lists / OCI indexes. Uses the docker
+    CLI's credential store; `registry_manifest` answers the same question over direct HTTPS
+    with no daemon or plugin.
 
     args:
         image - Image reference, e.g. "alpine:3.19" or "ghcr.io/org/repo@sha256:..."
@@ -261,7 +264,7 @@ def buildx_imagetools_create(
     dry_run: bool = False,
     annotations: list[str] | None = None,
     platforms: list[str] | None = None,
-    files: list[str] | None = None,
+    descriptor_files: list[str] | None = None,
     builder: str | None = None,
     timeout_seconds: float = _TIMEOUT_IMAGETOOLS_CREATE,
     host: str | None = None,
@@ -279,12 +282,12 @@ def buildx_imagetools_create(
         dry_run - Print the resulting manifest without pushing
         annotations - OCI annotations (repeatable; passed verbatim)
         platforms - Filter source platforms when combining
-        files - Read source descriptors from files instead of refs
+        descriptor_files - Files to read source descriptors from, instead of refs
         builder - Override the active builder
         timeout_seconds - Subprocess timeout (default 600s)
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
-    if not sources and not files:
+    if not sources and not descriptor_files:
         raise ValueError("buildx_imagetools_create requires at least one source ref or file")
     args: list[str] = ["imagetools", "create", "--tag", target]
     if append:
@@ -295,7 +298,7 @@ def buildx_imagetools_create(
         args.extend(["--annotation", annotation])
     if platforms:
         args.extend(["--platform", ",".join(platforms)])
-    for f in files or []:
+    for f in descriptor_files or []:
         args.extend(["--file", f])
     if builder is not None:
         args.extend(["--builder", builder])
@@ -304,7 +307,7 @@ def buildx_imagetools_create(
 
 
 @tool()
-def buildx_ls(host: str | None = None) -> list:
+def buildx_list(host: str | None = None) -> list:
     """
     List builder instances.
 
@@ -318,7 +321,7 @@ def buildx_ls(host: str | None = None) -> list:
 
 
 @tool()
-def buildx_history_ls(builder: str | None = None, host: str | None = None) -> list:
+def buildx_history_list(builder: str | None = None, host: str | None = None) -> list:
     """
     List recent build records (BuildKit build history), parsed from `--format '{{json .}}'`.
 
@@ -344,10 +347,10 @@ def buildx_history_inspect(ref: str = "", builder: str | None = None, host: str 
     Inspect a single build record by ref, parsed from `--format json`.
 
     Returns the full record for one build — duration, materials, attestations, error (if any) — for
-    debugging a failed or slow build found via `buildx_history_ls`. Requires buildx >= v0.13.
+    debugging a failed or slow build found via `buildx_history_list`. Requires buildx >= v0.13.
 
     args:
-        ref - Build record ref. Pass the `ref` field from `buildx_history_ls` directly — it
+        ref - Build record ref. Pass the `ref` field from `buildx_history_list` directly — it
                    reports a qualified "<builder>/<node>/<id>", but `history inspect` only accepts the
                    bare id, so this reduces it to the id and (unless `builder` is given) targets the
                    builder named in the ref. Empty/omitted inspects the most recent build; the `^N`
@@ -387,7 +390,7 @@ def buildx_inspect(name: str | None = None, bootstrap: bool = False, host: str |
         name - Builder name (defaults to the active builder)
         bootstrap - Boot the builder if it isn't already running
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}.
-                    stdout is human-readable; parse with the agent or call buildx_ls for JSON.
+                    stdout is human-readable; parse with the agent or call buildx_list for JSON.
     """
     args: list[str] = ["inspect"]
     if bootstrap:
@@ -421,8 +424,7 @@ def buildx_du(builder: str | None = None, host: str | None = None) -> list:
 @tool()
 def buildx_prune(
     all: bool = False,
-    filter: dict | None = None,
-    keep_storage: str | None = None,
+    filters: dict | None = None,
     reserved_space: str | None = None,
     max_used_space: str | None = None,
     min_free_space: str | None = None,
@@ -438,8 +440,7 @@ def buildx_prune(
 
     args:
         all - Include internal/frontend images
-        filter - Filter values (e.g. {"until": "24h", "type": "exec.cachemount"})
-        keep_storage - DEPRECATED; older buildx flag. Use `reserved_space` instead.
+        filters - Filter by attributes (e.g. {"until": "24h", "type": "exec.cachemount"})
         reserved_space - Amount of disk to always keep (e.g. "10GB")
         max_used_space - Maximum disk space the cache may use (e.g. "20GB")
         min_free_space - Target amount of free disk after pruning (e.g. "5GB")
@@ -450,10 +451,7 @@ def buildx_prune(
     args: list[str] = ["prune", "--force"]
     if all:
         args.append("--all")
-    for key, value in (filter or {}).items():
-        args.extend(["--filter", f"{key}={value}"])
-    if keep_storage is not None:
-        args.extend(["--keep-storage", keep_storage])
+    args.extend(filter_args(filters))
     if reserved_space is not None:
         args.extend(["--reserved-space", reserved_space])
     if max_used_space is not None:
@@ -522,12 +520,12 @@ def buildx_use(name: str, default: bool = False, global_default: bool = False, h
 
     Without `default` or `global_default` the switch applies only to the current CLI
     session. `default` persists the choice for the current Docker context; `global_default`
-    persists across all Docker contexts. Use `buildx_ls` to see available builders and their
+    persists across all Docker contexts. Use `buildx_list` to see available builders and their
     current status. To avoid switching the global default, pass a specific builder name
     directly via `buildx_build`'s `builder` parameter instead.
 
     args:
-        name - Builder name to activate (from `buildx_ls`)
+        name - Builder name to activate (from `buildx_list`)
         default - Persist as default builder for the current Docker context
         global_default - Persist as default builder across all Docker contexts
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
@@ -542,7 +540,7 @@ def buildx_use(name: str, default: bool = False, global_default: bool = False, h
 
 
 @tool()
-def buildx_rm(
+def buildx_remove(
     name: str | None = None,
     all_inactive: bool = False,
     keep_state: bool = False,
@@ -562,10 +560,10 @@ def buildx_rm(
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
     if not name and not all_inactive:
-        raise ValueError("buildx_rm requires either `name` or `all_inactive=True`")
+        raise ValueError("buildx_remove requires either `name` or `all_inactive=True`")
     if name and all_inactive:
         raise ValueError(
-            "buildx_rm: `name` and `all_inactive=True` are mutually exclusive — pass `name` to "
+            "buildx_remove: `name` and `all_inactive=True` are mutually exclusive — pass `name` to "
             "remove a specific builder, or `all_inactive=True` to sweep every inactive one."
         )
     args: list[str] = ["rm"]

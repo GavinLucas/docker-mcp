@@ -420,7 +420,7 @@ def audit_swarm_health() -> str:
         "whether `ManagerStatus.Reachability` is `reachable` — an unreachable manager threatens "
         "quorum. Call out if you have an even number of managers or only one (no fault tolerance).\n"
         "2. Call `service_list`. For each service, compare desired vs running replicas: read the "
-        "mode from `Spec.Mode` (Replicated count vs Global), then call `service_tasks(service_id, "
+        "mode from `Spec.Mode` (Replicated count vs Global), then call `service_tasks(id_or_name, "
         "filters={'desired-state': 'running'})` to drop tasks the orchestrator has already retired, "
         "and count how many of the returned tasks have `Status.State == 'running'`. The filter keys "
         "on *desired* state, so a returned task can still be failed/rejected — don't count it as "
@@ -428,7 +428,7 @@ def audit_swarm_health() -> str:
         "3. For any service that is under-replicated, call `service_tasks` without the filter and "
         "look for tasks stuck in `rejected`/`failed`, or rapidly cycling through `shutdown` -> "
         "`starting` (a crash loop). Pull `Status.Err` and `Status.Message` off the failing task.\n"
-        "4. For a service that is crash-looping, call `service_logs(service_id, tail=200, "
+        "4. For a service that is crash-looping, call `service_logs(id_or_name, tail=200, "
         "timestamps=True)` and surface the last error.\n"
         "5. If a node is drained and should be removed, note that `node_remove` (force only if it is "
         "still reachable) is the follow-up — but do not call it as part of this audit.\n"
@@ -870,12 +870,12 @@ def deploy_swarm_stack(stack_name: str, compose_file: str) -> str:
         f"with `privileged: true`, host bind mounts, or env that looks like a secret (prefer swarm "
         f"`secrets`/`configs`). Note that some Compose keys are ignored by the swarm orchestrator "
         f"(e.g. `depends_on`, `build`) — call those out.\n"
-        f'3. Deploy with `stack_deploy(stack_name="{stack_name}", compose_files=["{compose_file}"])`. Add '
+        f'3. Deploy with `stack_deploy(name="{stack_name}", compose_files=["{compose_file}"])`. Add '
         f"`with_registry_auth=True` if any image is private, and `prune=True` only if the user wants "
         f"services removed when they leave the Compose file. Check the returned `returncode`/`stderr`.\n"
-        f'4. Verify convergence: `stack_services(stack_name="{stack_name}")` and confirm each service\'s '
+        f'4. Verify convergence: `stack_services(name="{stack_name}")` and confirm each service\'s '
         f"running replicas match its desired count. For any under-replicated service, "
-        f'`stack_ps(stack_name="{stack_name}", filters=["desired-state=running"])` and look for tasks '
+        f'`stack_ps(name="{stack_name}", filters=["desired-state=running"])` and look for tasks '
         f"stuck in `rejected`/`failed` — pull the task error.\n"
         f"5. Re-running `stack_deploy` with the same name updates the stack in place, so iterate on the "
         f"Compose file and redeploy rather than removing first. Mention `stack_remove` as the teardown, but "

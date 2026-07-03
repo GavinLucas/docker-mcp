@@ -32,7 +32,7 @@ def swarm_init(
         data_path_addr - Address to use for data path traffic
         data_path_port - Port number for data path traffic
         name - Name of the swarm
-        labels - User-defined key/value metadata
+        labels - Labels to set on the swarm
         autolock_managers - Encrypt manager keys at rest
         log_driver - Default log driver configuration
     returns: str - The node id of the newly created swarm manager

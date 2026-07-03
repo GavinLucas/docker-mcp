@@ -62,7 +62,7 @@ def test_plugin_enable():
     plugin = MagicMock()
     with _patch() as mock_client:
         mock_client.return_value.plugins.get.return_value = plugin
-        assert plugin_enable("myplugin", timeout=30) is True
+        assert plugin_enable("myplugin", timeout_seconds=30) is True
     plugin.enable.assert_called_once_with(timeout=30)
 
 

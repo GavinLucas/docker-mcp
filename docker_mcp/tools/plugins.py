@@ -84,22 +84,22 @@ def plugin_disable(name: str, force: bool = False, host: str | None = None) -> b
 
 
 @tool()
-def plugin_enable(name: str, timeout: int = 0, host: str | None = None) -> bool:
+def plugin_enable(name: str, timeout_seconds: int = 0, host: str | None = None) -> bool:
     """
     Activate an installed plugin so Docker routes relevant API calls through it.
 
     Activates a plugin that is currently disabled — either freshly installed or previously
     disabled via `plugin_disable`. If the plugin exposes configuration (check via
     `plugin_inspect`), call `plugin_configure` while it is still disabled before enabling it.
-    `timeout` controls how long Docker waits for the plugin process to become healthy;
+    `timeout_seconds` controls how long Docker waits for the plugin process to become healthy;
     0 means wait indefinitely.
 
     args:
         name - Plugin name or id to enable
-        timeout - Seconds to wait for the plugin to become healthy (0 = no timeout)
+        timeout_seconds - Seconds to wait for the plugin to become healthy (0 = no timeout)
     returns: bool - True after the plugin is enabled
     """
-    _get_client(host).plugins.get(name).enable(timeout=timeout)
+    _get_client(host).plugins.get(name).enable(timeout=timeout_seconds)
     return True
 
 

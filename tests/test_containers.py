@@ -151,7 +151,7 @@ def test_stop_container_uses_timeout():
     container = MagicMock()
     with _patch() as mock_client:
         mock_client.return_value.containers.get.return_value = container
-        container_stop("web", timeout=5)
+        container_stop("web", timeout_seconds=5)
     container.stop.assert_called_once_with(timeout=5)
 
 
@@ -159,7 +159,7 @@ def test_container_restart():
     container = MagicMock()
     with _patch() as mock_client:
         mock_client.return_value.containers.get.return_value = container
-        container_restart("web", timeout=30)
+        container_restart("web", timeout_seconds=30)
     container.restart.assert_called_once_with(timeout=30)
 
 
@@ -185,7 +185,7 @@ def test_container_remove():
     container = MagicMock()
     with _patch() as mock_client:
         mock_client.return_value.containers.get.return_value = container
-        assert container_remove("web", v=True, force=True) is True
+        assert container_remove("web", volumes=True, force=True) is True
     container.remove.assert_called_once_with(v=True, link=False, force=True)
 
 

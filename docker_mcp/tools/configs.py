@@ -23,7 +23,7 @@ def config_create(
     args:
         name - Unique config name within the swarm
         data - Raw bytes content of the config file
-        labels - Labels to apply to the config object
+        labels - Labels to set on the config
         templating - Templating driver config (e.g. {"Name": "golang"} for Go template syntax)
     returns: dict - The created config's attrs including its id
     """
@@ -36,14 +36,14 @@ def config_create(
 
 
 @tool()
-def config_inspect(config_id: str, host: str | None = None) -> dict:
+def config_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a swarm config by id.
+    Get a swarm config by id or name.
 
-    args: config_id - The config id
+    args: id_or_name - The config id or name
     returns: dict - The config's attrs
     """
-    return _get_client(host).configs.get(config_id).attrs
+    return _get_client(host).configs.get(id_or_name).attrs
 
 
 @tool()
@@ -58,12 +58,12 @@ def config_list(filters: dict | None = None, host: str | None = None) -> list:
 
 
 @tool()
-def config_remove(config_id: str, host: str | None = None) -> bool:
+def config_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Remove a swarm config.
 
-    args: config_id - The config id
+    args: id_or_name - The config id or name
     returns: bool - True after removal
     """
-    _get_client(host).configs.get(config_id).remove()
+    _get_client(host).configs.get(id_or_name).remove()
     return True

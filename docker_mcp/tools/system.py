@@ -278,7 +278,6 @@ def system_login(
         registry - URL to the registry (defaults to Docker Hub)
         reauth - Force re-authentication even if valid credentials exist
         dockercfg_path - Path to a custom dockercfg file
-        host - host label whose client caches the credentials (default: the default host)
     returns: dict - The server response from the login request
     """
     return _get_client(host).login(
@@ -307,7 +306,6 @@ def system_logout(registry: str | None = None, host: str | None = None) -> dict:
 
     args:
         registry - Registry key to clear, or None to clear every cached credential
-        host - host label whose client cache to clear (default: the default host)
     returns: dict - {"cleared": [<registry keys removed>]}
     """
     api = _get_client(host).api
@@ -378,9 +376,9 @@ def system_close(host: str | None = None) -> bool:
 
     Use this to force a stale or errored connection to be discarded. Prefer `system_reconnect` when you
     want to immediately re-establish the connection rather than wait for the next tool call to
-    trigger a lazy rebuild. Closing all clients does not affect running containers.
+    trigger a lazy rebuild. With `host` omitted every pooled client is closed (unlike other tools,
+    where omitting it means the default host). Closing clients does not affect running containers.
 
-    args: host - host label to close; omit to close every pooled client
     returns: bool - True once closed
     """
     with _client_lock:
@@ -398,10 +396,10 @@ def system_reconnect(host: str | None = None) -> dict:
     Rebuild a pooled Docker client from its configured endpoint, to recover a wedged connection.
 
     Validates the rebuilt client before swapping in (and only then closes the old one), so a failed
-    rebuild leaves the working client in place. It CANNOT retarget to a different daemon — to add or
-    change a daemon, edit DOCKER_MCP_SERVER_HOSTS and restart.
+    rebuild leaves the working client in place. Rebuilds the default host's client when `host` is
+    omitted. It CANNOT retarget to a different daemon — to add or change a daemon, edit
+    DOCKER_MCP_SERVER_HOSTS and restart.
 
-    args: host - host label to rebuild, or None for the default host
     returns: dict - the rebuilt host's version info (same shape as `system_version`), confirming connectivity
     """
     resolved = _resolve_host(host)

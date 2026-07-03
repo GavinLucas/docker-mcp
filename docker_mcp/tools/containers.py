@@ -232,35 +232,35 @@ def container_start(id_or_name: str, host: str | None = None) -> dict:
 
 
 @tool()
-def container_stop(id_or_name: str, timeout: int = 10, host: str | None = None) -> dict:
+def container_stop(id_or_name: str, timeout_seconds: int = 10, host: str | None = None) -> dict:
     """
     Stop a container.
 
     args:
         id_or_name - The container id or name
-        timeout - Seconds to wait before forcing termination
+        timeout_seconds - Seconds to wait before forcing termination
     returns: dict - The container's attrs after stop
     """
     container = _get_client(host).containers.get(id_or_name)
     guard_not_self(container, host=host)
-    container.stop(timeout=timeout)
+    container.stop(timeout=timeout_seconds)
     container.reload()
     return container.attrs
 
 
 @tool()
-def container_restart(id_or_name: str, timeout: int = 10, host: str | None = None) -> dict:
+def container_restart(id_or_name: str, timeout_seconds: int = 10, host: str | None = None) -> dict:
     """
     Restart a container.
 
     args:
         id_or_name - The container id or name
-        timeout - Seconds to wait before forcing restart
+        timeout_seconds - Seconds to wait before forcing restart
     returns: dict - The container's attrs after restart
     """
     container = _get_client(host).containers.get(id_or_name)
     guard_not_self(container, host=host)
-    container.restart(timeout=timeout)
+    container.restart(timeout=timeout_seconds)
     container.reload()
     return container.attrs
 
@@ -313,21 +313,21 @@ def container_unpause(id_or_name: str, host: str | None = None) -> dict:
 
 @tool()
 def container_remove(
-    id_or_name: str, v: bool = False, link: bool = False, force: bool = False, host: str | None = None
+    id_or_name: str, volumes: bool = False, link: bool = False, force: bool = False, host: str | None = None
 ) -> bool:
     """
     Remove a container.
 
     args:
         id_or_name - The container id or name
-        v - Also remove anonymous volumes
+        volumes - Also remove anonymous volumes (the CLI's `--volumes`)
         link - Remove the specified link
         force - Force remove a running container
     returns: bool - True after removal completes
     """
     container = _get_client(host).containers.get(id_or_name)
     guard_not_self(container, host=host)
-    container.remove(v=v, link=link, force=force)
+    container.remove(v=volumes, link=link, force=force)
     return True
 
 

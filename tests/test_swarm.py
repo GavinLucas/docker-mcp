@@ -97,7 +97,7 @@ def test_swarm_update_rotates_tokens_via_flags():
     # Rotation lives on swarm_update (the docker-py swarm.update flags); fetch fresh tokens
     # afterwards with swarm_join_tokens.
     with _patch() as mock_client:
-        assert swarm_update(rotate_worker_token=True) is mock_client.return_value.swarm.update.return_value
+        assert swarm_update(rotate_worker_token=True) is True
     mock_client.return_value.swarm.update.assert_called_once_with(
         rotate_worker_token=True, rotate_manager_token=False, rotate_manager_unlock_key=False
     )

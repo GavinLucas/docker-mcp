@@ -117,11 +117,12 @@ def swarm_update(
         rotate_manager_unlock_key - Issue a new autolock unlock key for manager restart
     returns: bool - True after the update completes
     """
-    return _get_client(host).swarm.update(
+    _get_client(host).swarm.update(
         rotate_worker_token=rotate_worker_token,
         rotate_manager_token=rotate_manager_token,
         rotate_manager_unlock_key=rotate_manager_unlock_key,
     )
+    return True
 
 
 @tool()

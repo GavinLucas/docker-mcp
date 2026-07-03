@@ -32,14 +32,13 @@ def _env_credentials(username: str | None, password: str | None) -> tuple[str | 
     Setting credentials in the server's environment keeps them out of tool arguments, which many
     MCP clients log verbatim. The password may be a personal-access token. Explicit arguments win
     over the environment; the env pair is only used when *both* arguments are unset, so a caller
-    can't accidentally mix an argument username with an environment password. The DOCKER_MCP_*
-    spellings remain honored as deprecated aliases.
+    can't accidentally mix an argument username with an environment password.
     """
     if username is not None or password is not None:
         return username, password
     return (
-        read_env("DOCKER_MCP_SERVER_REGISTRY_USERNAME", "DOCKER_MCP_REGISTRY_USERNAME"),
-        read_env("DOCKER_MCP_SERVER_REGISTRY_PASSWORD", "DOCKER_MCP_REGISTRY_PASSWORD"),
+        read_env("DOCKER_MCP_SERVER_REGISTRY_USERNAME"),
+        read_env("DOCKER_MCP_SERVER_REGISTRY_PASSWORD"),
     )
 
 

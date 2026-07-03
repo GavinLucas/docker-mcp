@@ -21,7 +21,6 @@ MAX_PAYLOAD_BYTES = 33_554_432
 # ever absent (e.g. an unusual runtime). On the host (uvx) install neither signal is present, so
 # every guard below is a no-op and the existing behaviour is unchanged.
 IN_CONTAINER_ENV = "DOCKER_MCP_SERVER_IN_CONTAINER"
-_LEGACY_IN_CONTAINER_ENV = "DOCKER_MCP_IN_CONTAINER"  # deprecated alias, still honored
 
 # /proc/self/mountinfo fstypes that never represent a host bind mount: the container's own overlay
 # root and the assorted pseudo / in-memory filesystems. A path whose nearest mount is one of these
@@ -79,7 +78,7 @@ def in_container() -> bool:
     `DOCKER_MCP_SERVER_IN_CONTAINER=1`. Either signal flips on the in-container filesystem and
     self-termination guards; on the host install neither is present so those guards are inert.
     """
-    return env_flag(IN_CONTAINER_ENV, _LEGACY_IN_CONTAINER_ENV) or Path("/.dockerenv").exists()
+    return env_flag(IN_CONTAINER_ENV) or Path("/.dockerenv").exists()
 
 
 def _unescape_mountinfo_field(field: str) -> str:

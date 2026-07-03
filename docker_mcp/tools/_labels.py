@@ -21,9 +21,8 @@ from docker_mcp.tools._utils import env_flag, package_version
 # link. Clear of Docker's reserved namespaces (com.docker.*, io.docker.*, org.dockerproject.*).
 LABEL_PREFIX = "docker-mcp-server"
 
-# Opt-out switch (stamping is on by default). DOCKER_MCP_NO_LABELS remains honored as a deprecated alias.
+# Opt-out switch (stamping is on by default).
 DISABLE_ENV = "DOCKER_MCP_SERVER_NO_LABELS"
-_LEGACY_DISABLE_ENV = "DOCKER_MCP_NO_LABELS"
 
 # The key callers filter on; the rest are forensic.
 MANAGED_LABEL = f"{LABEL_PREFIX}.managed"
@@ -36,7 +35,7 @@ def provenance_labels(created_by: str) -> dict[str, str]:
 
     `created_by` is the @tool name (e.g. "container_run") recorded in the `.tool` label.
     """
-    if env_flag(DISABLE_ENV, _LEGACY_DISABLE_ENV):
+    if env_flag(DISABLE_ENV):
         return {}
     return {
         MANAGED_LABEL: "true",

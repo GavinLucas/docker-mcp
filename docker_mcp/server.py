@@ -223,10 +223,9 @@ _CONNECTION_CONTROL = frozenset({"system_close", "system_reconnect", "system_log
 # Read-only env switches, evaluated once at import (registration time):
 #   DOCKER_MCP_SERVER_READONLY       — register only READ_ONLY tools (a true read-only server).
 #   DOCKER_MCP_SERVER_NO_DESTRUCTIVE — register everything except DESTRUCTIVE tools (a "no data loss" mode).
-# READONLY is the stricter of the two and wins when both are set. The DOCKER_MCP_* spellings remain
-# honored as deprecated aliases (see docker_mcp._env).
-READONLY = env_flag("DOCKER_MCP_SERVER_READONLY", "DOCKER_MCP_READONLY")
-NO_DESTRUCTIVE = env_flag("DOCKER_MCP_SERVER_NO_DESTRUCTIVE", "DOCKER_MCP_NO_DESTRUCTIVE")
+# READONLY is the stricter of the two and wins when both are set.
+READONLY = env_flag("DOCKER_MCP_SERVER_READONLY")
+NO_DESTRUCTIVE = env_flag("DOCKER_MCP_SERVER_NO_DESTRUCTIVE")
 
 
 def _parse_domains(value: str | None) -> frozenset[str]:
@@ -239,9 +238,8 @@ def _parse_domains(value: str | None) -> frozenset[str]:
 # A tool's domain is its defining module under docker_mcp.tools (e.g. containers, compose, scout), so a
 # user who never touches swarm can drop the whole swarm/services/nodes/configs/secrets surface from the
 # tool list the client has to reason about. This filters *registration*, not classification — disabled
-# tools still appear in the tool-catalog resource so the choice is auditable. The DOCKER_MCP_DISABLE
-# spelling remains honored as a deprecated alias (see docker_mcp._env).
-DISABLED_DOMAINS = _parse_domains(read_env("DOCKER_MCP_SERVER_DISABLE", "DOCKER_MCP_DISABLE"))
+# tools still appear in the tool-catalog resource so the choice is auditable.
+DISABLED_DOMAINS = _parse_domains(read_env("DOCKER_MCP_SERVER_DISABLE"))
 
 
 @dataclass(frozen=True)

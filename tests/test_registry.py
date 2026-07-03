@@ -672,23 +672,6 @@ def test_env_credentials_default_anonymous(monkeypatch):
     assert _env_credentials(None, None) == (None, None)
 
 
-def test_env_credentials_honor_deprecated_aliases(monkeypatch):
-    # The pre-rename DOCKER_MCP_REGISTRY_* spellings still resolve as deprecated aliases.
-    monkeypatch.delenv("DOCKER_MCP_SERVER_REGISTRY_USERNAME", raising=False)
-    monkeypatch.delenv("DOCKER_MCP_SERVER_REGISTRY_PASSWORD", raising=False)
-    monkeypatch.setenv("DOCKER_MCP_REGISTRY_USERNAME", "legacyuser")
-    monkeypatch.setenv("DOCKER_MCP_REGISTRY_PASSWORD", "legacypass")
-    assert _env_credentials(None, None) == ("legacyuser", "legacypass")
-
-
-def test_env_credentials_canonical_wins_over_deprecated_alias(monkeypatch):
-    monkeypatch.setenv("DOCKER_MCP_SERVER_REGISTRY_USERNAME", "newuser")
-    monkeypatch.setenv("DOCKER_MCP_REGISTRY_USERNAME", "legacyuser")
-    monkeypatch.delenv("DOCKER_MCP_SERVER_REGISTRY_PASSWORD", raising=False)
-    monkeypatch.delenv("DOCKER_MCP_REGISTRY_PASSWORD", raising=False)
-    assert _env_credentials(None, None) == ("newuser", None)
-
-
 def test_registry_list_tags_uses_env_credentials_for_token_auth(monkeypatch):
     monkeypatch.setenv("DOCKER_MCP_SERVER_REGISTRY_USERNAME", "envuser")
     monkeypatch.setenv("DOCKER_MCP_SERVER_REGISTRY_PASSWORD", "envpass")

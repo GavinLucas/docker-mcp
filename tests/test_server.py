@@ -394,11 +394,9 @@ def _env_with(assignments: list[str]) -> dict:
     import os
 
     env = dict(os.environ)
-    # Clear every switch (canonical + deprecated alias) first so the parent environment can't leak
-    # into the child.
+    # Clear every switch first so the parent environment can't leak into the child.
     for switch in ("READONLY", "NO_DESTRUCTIVE", "DISABLE"):
         env.pop(f"DOCKER_MCP_SERVER_{switch}", None)
-        env.pop(f"DOCKER_MCP_{switch}", None)
     for assignment in assignments:
         key, _, value = assignment.partition("=")
         env[key] = value
@@ -462,20 +460,6 @@ def test_disable_env_combines_with_readonly_end_to_end():
 def test_unknown_disabled_domain_is_a_no_op_end_to_end():
     # A typo'd domain disables nothing (and is surfaced via the catalog's unknown_disabled_domains).
     assert _registered_names(["DOCKER_MCP_SERVER_DISABLE=swrm"]) == set(TOOL_CATEGORIES)
-
-
-def test_deprecated_disable_alias_still_drops_domains_end_to_end():
-    # The pre-rename DOCKER_MCP_DISABLE spelling is still honored as a deprecated alias, so existing
-    # client configs keep working after the rename to DOCKER_MCP_SERVER_DISABLE.
-    dropped = _names_by_domain("swarm", "plugins")
-    names = _registered_names(["DOCKER_MCP_DISABLE=swarm,plugins"])
-    assert names == set(TOOL_CATEGORIES) - dropped
-
-
-def test_canonical_disable_wins_over_deprecated_alias_end_to_end():
-    # When both spellings are set, the canonical DOCKER_MCP_SERVER_DISABLE takes precedence.
-    names = _registered_names(["DOCKER_MCP_SERVER_DISABLE=swarm", "DOCKER_MCP_DISABLE=compose"])
-    assert names == set(TOOL_CATEGORIES) - _names_by_domain("swarm")
 
 
 # ---------- instructions router stays in sync with the registered surface ----------

@@ -42,7 +42,6 @@ _self_container_id: str | None = None
 # fires when a call targets this host — our own container can't exist on any other daemon.
 _self_host_label: str | None = None
 _SELF_TERMINATE_OVERRIDE_ENV = "DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE"
-_LEGACY_SELF_TERMINATE_OVERRIDE_ENV = "DOCKER_MCP_ALLOW_SELF_TERMINATE"  # deprecated alias, still honored
 
 
 def _detect_self_container_id(client: docker.DockerClient) -> str | None:
@@ -95,7 +94,7 @@ def guard_not_self(container: Container, host: str | None = None) -> None:
         return
     if _self_host_label is not None and _resolve_host(host).label != _self_host_label:
         return
-    if env_flag(_SELF_TERMINATE_OVERRIDE_ENV, _LEGACY_SELF_TERMINATE_OVERRIDE_ENV):
+    if env_flag(_SELF_TERMINATE_OVERRIDE_ENV):
         return
     raise RuntimeError(
         f"Refusing to operate on the docker-mcp-server's own container ({container.short_id} "

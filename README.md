@@ -302,7 +302,7 @@ Many AI clients let you invoke registered MCP prompts directly (in Claude Code, 
 
 ## Configuration
 
-> **Env var rename (deprecated aliases honored).** The server's environment variables are namespaced `DOCKER_MCP_SERVER_*` to match the published package name. The older `DOCKER_MCP_*` spellings still work as deprecated aliases — the canonical name wins when both are set, and reading via an old name logs a one-time deprecation notice to stderr. Update your config to the `DOCKER_MCP_SERVER_*` names; the aliases may be removed in a future release.
+> **Env var naming.** The server's environment variables are namespaced `DOCKER_MCP_SERVER_*` to match the published package name. The pre-2.0 `DOCKER_MCP_*` alias spellings are no longer honored — see `MIGRATION-2.0.md`.
 
 To choose **which daemon(s)** the server talks to, see [Talking to a remote daemon](#talking-to-a-remote-daemon) and [Managing several daemons](#managing-several-daemons) (`DOCKER_MCP_SERVER_HOSTS` / `DOCKER_HOST`). The variables below instead restrict **which tools** are registered.
 

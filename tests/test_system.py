@@ -267,21 +267,6 @@ def test_guard_not_self_override_env_bypasses(monkeypatch):
     assert system_module.guard_not_self(_fake_container("self-full-id")) is None
 
 
-def test_guard_not_self_override_via_deprecated_alias(monkeypatch, capsys):
-    # The pre-rename DOCKER_MCP_ALLOW_SELF_TERMINATE spelling still bypasses the guard, and reading it
-    # emits the one-time stderr deprecation notice so the migration stays observable at runtime.
-    import docker_mcp._env as _env
-
-    monkeypatch.setattr(_env, "_warned_aliases", set())
-    monkeypatch.setattr(system_module, "_self_container_id", "self-full-id")
-    monkeypatch.delenv("DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE", raising=False)
-    monkeypatch.setenv("DOCKER_MCP_ALLOW_SELF_TERMINATE", "1")
-    assert system_module.guard_not_self(_fake_container("self-full-id")) is None
-    err = capsys.readouterr().err
-    assert "DOCKER_MCP_ALLOW_SELF_TERMINATE is deprecated" in err
-    assert "DOCKER_MCP_SERVER_ALLOW_SELF_TERMINATE" in err
-
-
 # ---------- _detect_self_container_id ----------
 
 

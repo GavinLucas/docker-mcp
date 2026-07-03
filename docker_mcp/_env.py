@@ -1,10 +1,10 @@
 # internal helper: environment-variable lookup with backward-compatible aliases
 #
 # The server's tunables are namespaced DOCKER_MCP_SERVER_* (matching the published package and
-# image name, docker-mcp-server). The older DOCKER_MCP_* spellings are still honored as deprecated
-# aliases so existing MCP-client configs and `docker run -e ...` invocations keep working unchanged.
-# The first time a deprecated alias is read we print a one-line notice to stderr (never stdout —
-# that is the stdio MCP transport) naming the canonical replacement.
+# image name, docker-mcp-server). No alias is currently registered (the pre-rename DOCKER_MCP_*
+# spellings were dropped in 2.0), but the fallback mechanism stays: a future rename passes the old
+# spelling as an alias and existing configs keep working, with a one-time stderr notice (never
+# stdout — that is the stdio MCP transport) naming the canonical replacement.
 #
 # Lives at the package root (not under tools/) so docker_mcp.server can use it without importing
 # docker_mcp.tools, which would be a circular import at tool-registration time.

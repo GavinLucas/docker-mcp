@@ -70,8 +70,6 @@ Set these in the client's `env` block. Three switches restrict which tools are r
 - **`DOCKER_MCP_SERVER_NO_DESTRUCTIVE`** — everything except destructive tools (`*_remove`, `*_prune`, `container_kill`, `compose_down`, …).
 - **`DOCKER_MCP_SERVER_DISABLE`** — comma-separated *domains* to drop wholesale (e.g. `swarm,services,nodes,configs,secrets` for a single-host server).
 
-The older `DOCKER_MCP_*` spellings of these variables still work as deprecated aliases (the canonical `DOCKER_MCP_SERVER_*` name wins when both are set).
-
 `DOCKER_HOST` / `DOCKER_TLS_VERIFY` / `DOCKER_CERT_PATH` retarget the daemon (e.g. `-e DOCKER_HOST=tcp://remote-host:2375`).
 
 See the [full configuration reference](https://github.com/GavinLucas/docker-mcp#configuration) for the complete list and examples.

@@ -133,7 +133,7 @@ noun-form (`container_logs`, `registry_tags`).
 | `remove_plugin` | `plugin_remove` |
 | `push_plugin` | removed (plugin-author tooling) |
 
-**CLI domains** (short-form verbs only):
+**CLI domains** (only the short-form-verb names changed):
 
 | 1.x | 2.0 |
 |---|---|

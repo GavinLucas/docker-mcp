@@ -61,9 +61,12 @@ macOS / ARM macOS / Windows against both the repo `pyproject.toml` and the lates
 release (the check that would have caught cryptography 49 dropping its x86_64-macOS wheel), plus
 real install smokes of the published package on `macos-latest`, `macos-15-intel` (Intel runner
 label retires Aug 2027), and `windows-latest` — `import docker_mcp` and `uvx docker-mcp-server
---version`. Failures file a deduplicated `ci-failure` + `wf:canary` issue via
-`.github/actions/file-failure-issue`. `main()` handles `--version` (print the installed version,
-exit) before any daemon/network contact — the canary's entry-point smoke depends on it.
+--version`. **PRs into main also run the repo-pyproject resolution leg** (the only part that
+exercises PR content), so a dependency change that breaks a platform is caught before merge; the
+published-package legs and issue filing stay schedule/dispatch-only. Failures on unattended runs
+file a deduplicated `ci-failure` + `wf:canary` issue via `.github/actions/file-failure-issue`.
+`main()` handles `--version` (print the installed version, exit) before any daemon/network
+contact — the canary's entry-point smoke depends on it.
 
 ## Architecture
 

@@ -14,6 +14,12 @@ name: Weekly canary
 # On failure the notify job files (or comments on) a deduplicated issue labeled
 # ci-failure + wf:canary — one open issue per stream, so four red Mondays make one thread, which
 # the scheduled Claude responder routine (and the humans it defers to) works from.
+#
+# PRs into main also run the repo-pyproject resolution leg — the only part that exercises the
+# PR's own changes — so a dependency edit that breaks a platform is caught before merge, not the
+# following Monday. The published-package legs (PyPI-release resolution, install smokes) and the
+# issue filing stay schedule/dispatch-only: on a PR they would re-test the already-shipped
+# release and could block a merge on breakage the PR didn't cause.
 
 permissions:
   contents: read
@@ -22,6 +28,8 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Mondays 06:00 UTC
   workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 jobs:
 
@@ -43,8 +51,10 @@ jobs:
         # enters the tree, exempt it per-package rather than dropping :all:.
         run: |
           set -euo pipefail
-          latest="$(curl -fsSL https://pypi.org/pypi/docker-mcp-server/json | jq -r .info.version)"
-          echo "Latest published release: $latest"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            latest="$(curl -fsSL https://pypi.org/pypi/docker-mcp-server/json | jq -r .info.version)"
+            echo "Latest published release: $latest"
+          fi
           failed=0
           for target in x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc; do
             echo "::group::$target (repo pyproject.toml)"
@@ -57,13 +67,17 @@ jobs:
               failed=1
             fi
             echo "::endgroup::"
-            echo "::group::$target (published docker-mcp-server==$latest)"
-            if ! echo "docker-mcp-server==$latest" | uv pip compile - --python-platform "$target" \
-                --python-version 3.14 --only-binary :all: > /dev/null; then
-              echo "::error::wheels-only resolution FAILED for $target against published $latest — an upstream dep dropped wheels under a shipped release"
-              failed=1
+            # The published-release leg tests what's already on PyPI, not this checkout — on a PR
+            # it can only fail for reasons the PR didn't cause, so it runs on schedule/dispatch only.
+            if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+              echo "::group::$target (published docker-mcp-server==$latest)"
+              if ! echo "docker-mcp-server==$latest" | uv pip compile - --python-platform "$target" \
+                  --python-version 3.14 --only-binary :all: > /dev/null; then
+                echo "::error::wheels-only resolution FAILED for $target against published $latest — an upstream dep dropped wheels under a shipped release"
+                failed=1
+              fi
+              echo "::endgroup::"
             fi
-            echo "::endgroup::"
           done
           exit "$failed"
 
@@ -72,6 +86,8 @@ jobs:
     # macos-15-intel is the last Intel-macOS hosted runner label; GitHub retires it August 2027.
     # When the label disappears, drop that matrix leg — wheel resolution for x86_64-apple-darwin
     # continues in the resolve-crossplatform job above, which needs no Intel hardware.
+    # Skipped on PRs: it installs the published release, so it never exercises PR content.
+    if: github.event_name != 'pull_request'
     name: Install smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -99,7 +115,8 @@ jobs:
     name: File failure issue
     runs-on: ubuntu-latest
     needs: [resolve-crossplatform, install-smoke]
-    if: failure()
+    # PR failures are visible on the PR itself; the issue stream is for unattended runs.
+    if: failure() && github.event_name != 'pull_request'
     permissions:
       contents: read   # checkout, to use the local composite action
       issues: write

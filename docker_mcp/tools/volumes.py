@@ -40,14 +40,14 @@ def volume_create(
 
 
 @tool()
-def volume_inspect(volume_id: str, host: str | None = None) -> dict:
+def volume_inspect(name: str, host: str | None = None) -> dict:
     """
     Get a volume by name.
 
-    args: volume_id - The volume name
+    args: name - The volume name
     returns: dict - The volume's attrs
     """
-    return _get_client(host).volumes.get(volume_id).attrs
+    return _get_client(host).volumes.get(name).attrs
 
 
 @tool()
@@ -78,14 +78,14 @@ def volume_prune(filters: dict | None = None, host: str | None = None) -> dict:
 
 
 @tool()
-def volume_remove(volume_id: str, force: bool = False, host: str | None = None) -> bool:
+def volume_remove(name: str, force: bool = False, host: str | None = None) -> bool:
     """
     Remove a volume.
 
     args:
-        volume_id - The volume name
+        name - The volume name
         force - Force removal
     returns: bool - True after removal
     """
-    _get_client(host).volumes.get(volume_id).remove(force=force)
+    _get_client(host).volumes.get(name).remove(force=force)
     return True

@@ -16,7 +16,7 @@ def secret_create(
     args:
         name - The name of the secret
         data - The secret payload
-        labels - Labels to apply
+        labels - Labels to set on the secret
         driver - Optional secret driver configuration
     returns: dict - The created secret's attrs
     """
@@ -29,14 +29,14 @@ def secret_create(
 
 
 @tool()
-def secret_inspect(secret_id: str, host: str | None = None) -> dict:
+def secret_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get a swarm secret by id.
 
-    args: secret_id - The secret id
+    args: id_or_name - The secret id
     returns: dict - The secret's attrs
     """
-    return _get_client(host).secrets.get(secret_id).attrs
+    return _get_client(host).secrets.get(id_or_name).attrs
 
 
 @tool()
@@ -51,7 +51,7 @@ def secret_list(filters: dict | None = None, host: str | None = None) -> list:
 
 
 @tool()
-def secret_remove(secret_id: str, host: str | None = None) -> bool:
+def secret_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Remove a Swarm secret; requires a swarm manager.
 
@@ -62,8 +62,8 @@ def secret_remove(secret_id: str, host: str | None = None) -> bool:
     filtering by secret reference). The secret id (not name) is required; retrieve it from `secret_list`
     or `secret_inspect`.
 
-    args: secret_id - The secret id to remove
+    args: id_or_name - The secret id to remove
     returns: bool - True after removal
     """
-    _get_client(host).secrets.get(secret_id).remove()
+    _get_client(host).secrets.get(id_or_name).remove()
     return True

@@ -56,14 +56,14 @@ def network_create(
 
 
 @tool()
-def network_inspect(network_id: str, host: str | None = None) -> dict:
+def network_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get a network by id or name.
 
-    args: network_id - The network id or name
+    args: id_or_name - The network id or name
     returns: dict - The network's attrs
     """
-    return _get_client(host).networks.get(network_id).attrs
+    return _get_client(host).networks.get(id_or_name).attrs
 
 
 @tool()
@@ -109,20 +109,20 @@ def network_prune(filters: dict | None = None, host: str | None = None) -> dict:
 
 
 @tool()
-def network_remove(network_id: str, host: str | None = None) -> bool:
+def network_remove(id_or_name: str, host: str | None = None) -> bool:
     """
     Remove a network.
 
-    args: network_id - The network id or name
+    args: id_or_name - The network id or name
     returns: bool - True after removal
     """
-    _get_client(host).networks.get(network_id).remove()
+    _get_client(host).networks.get(id_or_name).remove()
     return True
 
 
 @tool()
 def network_connect(
-    network_id: str,
+    id_or_name: str,
     container: str,
     aliases: list | None = None,
     links: list | None = None,
@@ -143,7 +143,7 @@ def network_connect(
     to undo.
 
     args:
-        network_id - Network id or name to connect the container to
+        id_or_name - Network id or name to connect the container to
         container - Container id or name to attach
         aliases - Additional DNS names for this container within the network
         links - Legacy container links (deprecated)
@@ -153,7 +153,7 @@ def network_connect(
         driver_opt - Driver-specific endpoint options
     returns: bool - True after the container is connected
     """
-    network = _get_client(host).networks.get(network_id)
+    network = _get_client(host).networks.get(id_or_name)
     network.connect(
         container,
         aliases=aliases,
@@ -167,16 +167,16 @@ def network_connect(
 
 
 @tool()
-def network_disconnect(network_id: str, container: str, force: bool = False, host: str | None = None) -> bool:
+def network_disconnect(id_or_name: str, container: str, force: bool = False, host: str | None = None) -> bool:
     """
     Disconnect a container from a network.
 
     args:
-        network_id - The network id or name
+        id_or_name - The network id or name
         container - The container id or name
         force - Force disconnect
     returns: bool - True after the container is disconnected
     """
-    network = _get_client(host).networks.get(network_id)
+    network = _get_client(host).networks.get(id_or_name)
     network.disconnect(container, force=force)
     return True

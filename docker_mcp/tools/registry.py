@@ -381,13 +381,13 @@ def _next_link(link_header: str | None) -> str | None:
 
 @tool()
 def registry_tags(
-    image: str,
+    repository: str,
     username: str | None = None,
     password: str | None = None,
     limit: int = 1000,
 ) -> dict:
     """
-    List tags for an image in an OCI v2 registry without pulling.
+    List tags for a repository in an OCI v2 registry without pulling.
 
     Works against Docker Hub, GHCR, ECR, GAR, and any OCI-compliant registry; anonymous if no
     credentials are passed. Talks directly to the registry over HTTPS and does NOT read
@@ -395,7 +395,7 @@ def registry_tags(
     DOCKER_MCP_SERVER_REGISTRY_PASSWORD env vars (keeps secrets out of tool args, which clients often log).
 
     args:
-        image - Image ref, e.g. "alpine", "ghcr.io/org/repo"; any `:tag`/`@digest` is stripped
+        repository - Image/repository ref, e.g. "alpine", "ghcr.io/org/repo"; any `:tag`/`@digest` is stripped
         username - Optional registry username (overrides DOCKER_MCP_SERVER_REGISTRY_USERNAME)
         password - Optional registry password/token (overrides DOCKER_MCP_SERVER_REGISTRY_PASSWORD)
         limit - Max tags to return (default 1000, >= 1); pagination capped at 50 pages
@@ -404,7 +404,7 @@ def registry_tags(
     if limit < 1:
         raise ValueError(f"limit must be >= 1, got {limit}")
     username, password = _env_credentials(username, password)
-    registry, repo = _parse_image_ref(image)
+    registry, repo = _parse_image_ref(repository)
     tags: list[str] = []
     truncated = False
     path: str | None = f"/v2/{repo}/tags/list"
@@ -436,26 +436,26 @@ def registry_tags(
 
 @tool()
 def registry_manifest(
-    image: str,
+    repository: str,
     reference: str = "latest",
     username: str | None = None,
     password: str | None = None,
 ) -> dict:
     """
-    Fetch the manifest for an image reference without pulling.
+    Fetch a repository's manifest without pulling.
 
     May return a single-platform image manifest or a multi-platform manifest list / OCI image
     index, depending on what the registry serves for that tag.
 
     args:
-        image - Image ref, e.g. "ghcr.io/org/repo"; `:tag`/`@digest` is stripped — pass via `reference`
+        repository - Image/repository ref, e.g. "ghcr.io/org/repo"; `:tag`/`@digest` is stripped — pass via `reference`
         reference - Tag or digest (default "latest")
         username - Optional registry username (overrides DOCKER_MCP_SERVER_REGISTRY_USERNAME; no config.json)
         password - Optional registry password/token (overrides DOCKER_MCP_SERVER_REGISTRY_PASSWORD)
     returns: dict - {"name", "registry", "reference", "media_type", "digest", "manifest": <JSON body>}
     """
     username, password = _env_credentials(username, password)
-    registry, repo = _parse_image_ref(image)
+    registry, repo = _parse_image_ref(repository)
     resp = _registry_get(
         registry,
         f"/v2/{repo}/manifests/{reference}",
@@ -476,7 +476,7 @@ def registry_manifest(
 
 @tool()
 def registry_image_config(
-    image: str,
+    repository: str,
     reference: str = "latest",
     platform: str = "linux/amd64",
     username: str | None = None,
@@ -491,7 +491,7 @@ def registry_image_config(
     -> the config blob.
 
     args:
-        image - Image ref, e.g. "ghcr.io/org/repo"; `:tag`/`@digest` is stripped — pass via `reference`
+        repository - Image/repository ref, e.g. "ghcr.io/org/repo"; `:tag`/`@digest` is stripped — pass via `reference`
         reference - Tag or digest (default "latest")
         platform - Platform to select from a multi-platform image, "os/arch[/variant]"
                         (default "linux/amd64"); ignored for single-platform images
@@ -501,7 +501,7 @@ def registry_image_config(
                     `platform` is the selected platform (None if single-platform)
     """
     username, password = _env_credentials(username, password)
-    registry, repo = _parse_image_ref(image)
+    registry, repo = _parse_image_ref(repository)
 
     def _fetch_manifest(ref: str) -> dict:
         resp = _registry_get(
@@ -516,7 +516,7 @@ def registry_image_config(
 
     manifest = _fetch_manifest(reference)
     selected_platform: str | None = None
-    # A manifest list / OCI image index has "manifests"; a single-platform manifest has "config".
+    # A manifest list / OCI repository index has "manifests"; a single-platform manifest has "config".
     if "manifests" in manifest:
         digest, selected_platform = _select_platform_digest(manifest, platform)
         manifest = _fetch_manifest(digest)
@@ -558,7 +558,7 @@ def _parse_platform(platform: str) -> tuple[str, str, str | None]:
 
 def _select_platform_digest(index: dict, platform: str) -> tuple[str, str]:
     """
-    Pick the sub-manifest matching `platform` from a manifest list / OCI image index.
+    Pick the sub-manifest matching `platform` from a manifest list / OCI repository index.
 
     `platform` is "os/arch[/variant]". An omitted variant matches any variant of that os/arch — so
     "linux/arm64" still selects a "linux/arm64/v8" entry, following Docker's default-variant
@@ -576,7 +576,7 @@ def _select_platform_digest(index: dict, platform: str) -> tuple[str, str]:
         plat = entry.get("platform", {})
         os_, arch = plat.get("os"), plat.get("architecture")
         if os_ in (None, "unknown") or arch in (None, "unknown"):
-            continue  # attestation / non-image manifest
+            continue  # attestation / non-repository manifest
         variant = plat.get("variant")
         actual = "/".join(p for p in (os_, arch, variant) if p)
         available.append(actual)
@@ -585,7 +585,7 @@ def _select_platform_digest(index: dict, platform: str) -> tuple[str, str]:
             if digest:
                 return digest, actual
     raise ValueError(
-        f"No manifest for platform {platform!r} in image index. Available platforms: "
+        f"No manifest for platform {platform!r} in repository index. Available platforms: "
         f"{', '.join(sorted(set(available))) or 'none'}."
     )
 

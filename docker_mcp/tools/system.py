@@ -278,7 +278,6 @@ def system_login(
         registry - URL to the registry (defaults to Docker Hub)
         reauth - Force re-authentication even if valid credentials exist
         dockercfg_path - Path to a custom dockercfg file
-        host - host label whose client caches the credentials (default: the default host)
     returns: dict - The server response from the login request
     """
     return _get_client(host).login(
@@ -307,7 +306,6 @@ def system_logout(registry: str | None = None, host: str | None = None) -> dict:
 
     args:
         registry - Registry key to clear, or None to clear every cached credential
-        host - host label whose client cache to clear (default: the default host)
     returns: dict - {"cleared": [<registry keys removed>]}
     """
     api = _get_client(host).api

@@ -52,7 +52,7 @@ def image_build(
         buildargs - Build-time variables passed as `--build-arg`; dict of str→str
         container_limits - Resource limits for the build container, e.g. {"memory": 134217728}
         shmsize - Size of /dev/shm in bytes for build steps that need shared memory
-        labels - Labels to apply to the resulting image; dict of str→str
+        labels - Labels to set on the resulting image (dict of str→str)
         cache_from - List of image references to use as layer cache sources
         target - Stop at this named build stage (multi-stage Dockerfiles)
         network_mode - Network mode for RUN instructions during build (e.g. "host", "none")
@@ -92,18 +92,18 @@ def image_build(
 
 
 @tool()
-def image_inspect(name: str, host: str | None = None) -> dict:
+def image_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
     Get an image by name or id.
 
-    args: name - The image name or id
+    args: id_or_name - The image name or id
     returns: dict - The image's attrs
     """
-    return _get_client(host).images.get(name).attrs
+    return _get_client(host).images.get(id_or_name).attrs
 
 
 @tool()
-def image_registry_data(name: str, auth_config: dict | None = None, host: str | None = None) -> dict:
+def image_registry_data(repository: str, auth_config: dict | None = None, host: str | None = None) -> dict:
     """
     Get registry data for an image without pulling it.
 
@@ -112,27 +112,27 @@ def image_registry_data(name: str, auth_config: dict | None = None, host: str | 
     `~/.docker/config.json`, and leave `auth_config` unset.
 
     args:
-        name - Image reference
+        repository - Image reference
         auth_config - Optional registry authentication config
     returns: dict - Registry data attrs
     """
-    return _get_client(host).images.get_registry_data(name, auth_config=auth_config).attrs
+    return _get_client(host).images.get_registry_data(repository, auth_config=auth_config).attrs
 
 
 @tool()
 def image_list(
-    name: str | None = None, all: bool = False, filters: dict | None = None, host: str | None = None
+    repository: str | None = None, all: bool = False, filters: dict | None = None, host: str | None = None
 ) -> list:
     """
     List images on the server.
 
     args:
-        name - Only show images of this repository
+        repository - Only show images of this repository
         all - Show intermediate image layers
         filters - Filter by attributes (label, dangling, before, since, etc.)
     returns: list - A list of image attrs dicts
     """
-    return [i.attrs for i in _get_client(host).images.list(name=name, all=all, filters=filters)]
+    return [i.attrs for i in _get_client(host).images.list(name=repository, all=all, filters=filters)]
 
 
 @tool()
@@ -183,7 +183,7 @@ def image_push(
 
 
 @tool()
-def image_remove(image: str, force: bool = False, noprune: bool = False, host: str | None = None) -> bool:
+def image_remove(id_or_name: str, force: bool = False, noprune: bool = False, host: str | None = None) -> bool:
     """
     Remove a local image by name or id.
 
@@ -194,12 +194,12 @@ def image_remove(image: str, force: bool = False, noprune: bool = False, host: s
     the parent layers for another purpose.
 
     args:
-        image - Image name (with optional tag/digest) or id to remove
+        id_or_name - Image name (with optional tag/digest) or id to remove
         force - Remove even if referenced by stopped containers or multiple tags
         noprune - Do not delete untagged intermediate parent layers
     returns: bool - True after removal completes
     """
-    _get_client(host).images.remove(image=image, force=force, noprune=noprune)
+    _get_client(host).images.remove(image=id_or_name, force=force, noprune=noprune)
     return True
 
 
@@ -262,7 +262,7 @@ def image_load(data: bytes | None = None, from_file: str | None = None, host: st
 
 @tool()
 def image_save(
-    name: str,
+    id_or_name: str,
     dest_path: str | None = None,
     named: bool = False,
     overwrite: bool = False,
@@ -279,38 +279,40 @@ def image_save(
     exists (e.g. a containerized server without a bind mount).
 
     args:
-        name - Image name or id
+        id_or_name - Image name or id
         dest_path - Destination path on the server host; omit to return the bytes in band
-        named - Whether to keep the image name when saving
+        named - Whether to keep the image id_or_name when saving
         overwrite - Replace dest_path if it already exists (default False)
         max_bytes - In-band mode: abort with ValueError beyond this many bytes (default 32 MiB)
     returns: bytes | dict - the tarball bytes (in band), or {"path": <resolved path>, "bytes_written": int}
     """
-    image = _get_client(host).images.get(name)
+    image = _get_client(host).images.get(id_or_name)
     if dest_path is None:
-        return join_bounded(image.save(named=named), max_bytes, f"save of image {name}")
+        return join_bounded(image.save(named=named), max_bytes, f"save of image {id_or_name}")
     path, written = stream_to_file(image.save(named=named), dest_path, overwrite=overwrite)
     return {"path": str(path), "bytes_written": written}
 
 
 @tool()
-def image_tag(name: str, repository: str, tag: str | None = None, force: bool = False, host: str | None = None) -> bool:
+def image_tag(
+    id_or_name: str, repository: str, tag: str | None = None, force: bool = False, host: str | None = None
+) -> bool:
     """
     Tag an image into a repository.
 
     args:
-        name - The source image name or id
+        id_or_name - The source image name or id
         repository - Target repository name
         tag - Optional tag for the new image
         force - Force the tag
     returns: bool - True if the image was tagged
     """
-    image = _get_client(host).images.get(name)
+    image = _get_client(host).images.get(id_or_name)
     return image.tag(repository, tag=tag, force=force)
 
 
 @tool()
-def image_history(name: str, host: str | None = None) -> list:
+def image_history(id_or_name: str, host: str | None = None) -> list:
     """
     Return the layer history of an image.
 
@@ -320,7 +322,7 @@ def image_history(name: str, host: str | None = None) -> list:
     COPY), `Size` (bytes added by that layer), and `Comment`. For full image metadata use
     `image_inspect` instead.
 
-    args: name - Image name (with optional tag/digest) or id
+    args: id_or_name - Image name (with optional tag/digest) or id
     returns: list - Layer history entries, newest first
     """
-    return _get_client(host).images.get(name).history()
+    return _get_client(host).images.get(id_or_name).history()

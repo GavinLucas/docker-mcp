@@ -4,9 +4,10 @@
 # `<management-command>_<verb-or-noun>`, anchored to the docker CLI's management-command
 # structure, with long-form verb vocabulary (list/remove/inspect — never ls/rm/get).
 
+import inspect
 import re
 
-import docker_mcp.tools  # noqa: F401 — imports every tool module so the registry is populated
+import docker_mcp.tools
 from docker_mcp.server import _seen_tool_names
 
 # The approved namespace prefixes: one per tool domain, plus `host_` for the host-registry
@@ -60,3 +61,93 @@ def test_no_tool_name_starts_with_a_bare_verb():
     banned_leading_verbs = ("list_", "get_", "create_", "remove_", "update_", "inspect_")
     offenders = sorted(name for name in _seen_tool_names if name.startswith(banned_leading_verbs))
     assert offenders == [], f"verb-first tool names (1.x style): {offenders}"
+
+
+# ---------- parameter conventions ----------
+
+# Identifier params use exactly these spellings (see CLAUDE.md "Naming convention"):
+#   id_or_name — daemon objects addressable by either (containers, images, networks, services, ...)
+#   name/names — name-only resources (volumes, contexts, plugins, stacks, builders)
+#   repository — remote repo refs (pull/push, hub_*, registry_*)
+# These 1.x spellings must never come back; `v` and bare `timeout` are banned outright.
+_BANNED_PARAMS = frozenset(
+    {
+        "container_id",
+        "image_id",
+        "network_id",
+        "volume_id",
+        "config_id",
+        "secret_id",
+        "service_id",
+        "node_id",
+        "plugin_id",
+        "stack_name",
+        "stack_names",
+        "id_or_names",
+        "v",
+        "timeout",  # always timeout_seconds
+    }
+)
+
+
+def _tool_functions():
+    """Yield (tool_name, function) for every registered tool, via the star-imported tools namespace."""
+    for name in sorted(_seen_tool_names):
+        func = getattr(docker_mcp.tools, name, None)
+        if func is not None:
+            yield name, func
+
+
+def test_no_tool_uses_a_banned_parameter_spelling():
+    offenders = [
+        f"{name}({param})"
+        for name, func in _tool_functions()
+        for param in inspect.signature(func).parameters
+        if param in _BANNED_PARAMS
+    ]
+    assert offenders == [], f"banned parameter spellings: {offenders}"
+
+
+# Canonical docstring lines for params shared across many tools: same param, same words.
+# Keyed by param name -> the exact `args:` line text the description must START with (a tool may
+# append a tool-specific clause after the canonical prefix). (tool, param) pairs in _PARAM_EXCEPTIONS
+# opt out where the same param name deliberately carries a different meaning.
+_CANONICAL_PARAM_PREFIXES = {
+    "project_dir": "Dir with the compose file (default: server cwd",
+    "files": "Explicit compose file paths (repeatable, `-f`",
+    "labels": "Labels to set on the",
+}
+_PARAM_EXCEPTIONS = {
+    ("buildx_bake", "files"),  # bake files are HCL/compose *bake* definitions, not compose files
+}
+
+_ARG_LINE = re.compile(r"^\s*(?P<param>\w+) - (?P<desc>.+)$")
+
+
+def _documented_params(func):
+    """Parse `param - description` lines out of a tool docstring's args block."""
+    for line in (func.__doc__ or "").splitlines():
+        match = _ARG_LINE.match(line)
+        if match:
+            yield match.group("param"), match.group("desc")
+
+
+def test_shared_params_carry_canonical_descriptions():
+    offenders = []
+    for name, func in _tool_functions():
+        for param, desc in _documented_params(func):
+            canonical = _CANONICAL_PARAM_PREFIXES.get(param)
+            if canonical is None or (name, param) in _PARAM_EXCEPTIONS:
+                continue
+            if not desc.startswith(canonical):
+                offenders.append(f"{name}({param}): {desc!r} does not start with {canonical!r}")
+    assert offenders == [], "shared-param description drift:\n" + "\n".join(offenders)
+
+
+def test_host_param_is_never_documented_in_docstrings():
+    # `host` is stripped from single-host schemas and gets an injected canonical description in
+    # multi-host mode (_apply_host_schema) — a docstring line would duplicate or contradict that.
+    offenders = [
+        name for name, func in _tool_functions() if any(param == "host" for param, _ in _documented_params(func))
+    ]
+    assert offenders == [], f"tools documenting `host` in their docstring: {offenders}"

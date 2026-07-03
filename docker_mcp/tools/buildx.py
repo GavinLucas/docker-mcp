@@ -74,7 +74,7 @@ def buildx_build(
         file - Dockerfile path (relative to context unless absolute)
         build_args - Build-time variables (each becomes `--build-arg KEY=VALUE`)
         build_contexts - Additional named build contexts (e.g. {"deps": "./vendor"})
-        labels - Image labels (each becomes `--label KEY=VALUE`)
+        labels - Labels to set on the resulting image (each becomes `--label KEY=VALUE`)
         annotations - OCI manifest annotations (passed verbatim, repeatable)
         target - Target build stage to stop at
         push - Push the result to the registry (mutually exclusive with `load`)
@@ -261,7 +261,7 @@ def buildx_imagetools_create(
     dry_run: bool = False,
     annotations: list[str] | None = None,
     platforms: list[str] | None = None,
-    files: list[str] | None = None,
+    descriptor_files: list[str] | None = None,
     builder: str | None = None,
     timeout_seconds: float = _TIMEOUT_IMAGETOOLS_CREATE,
     host: str | None = None,
@@ -279,12 +279,12 @@ def buildx_imagetools_create(
         dry_run - Print the resulting manifest without pushing
         annotations - OCI annotations (repeatable; passed verbatim)
         platforms - Filter source platforms when combining
-        files - Read source descriptors from files instead of refs
+        descriptor_files - Files to read source descriptors from, instead of refs
         builder - Override the active builder
         timeout_seconds - Subprocess timeout (default 600s)
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
     """
-    if not sources and not files:
+    if not sources and not descriptor_files:
         raise ValueError("buildx_imagetools_create requires at least one source ref or file")
     args: list[str] = ["imagetools", "create", "--tag", target]
     if append:
@@ -295,7 +295,7 @@ def buildx_imagetools_create(
         args.extend(["--annotation", annotation])
     if platforms:
         args.extend(["--platform", ",".join(platforms)])
-    for f in files or []:
+    for f in descriptor_files or []:
         args.extend(["--file", f])
     if builder is not None:
         args.extend(["--builder", builder])

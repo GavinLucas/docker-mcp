@@ -43,7 +43,7 @@ def node_update(id_or_name: str, node_spec: dict, host: str | None = None) -> bo
 
 
 @tool()
-def node_remove(node_id: str, force: bool = False, host: str | None = None) -> bool:
+def node_remove(id_or_name: str, force: bool = False, host: str | None = None) -> bool:
     """
     Remove a node from the swarm.
 
@@ -51,9 +51,9 @@ def node_remove(node_id: str, force: bool = False, host: str | None = None) -> b
     swarm first, so its tasks reschedule cleanly. Removing an active/reachable node requires `force=True`.
 
     args:
-        node_id - The node id or name to remove
+        id_or_name - The node id or name to remove
         force - Force removal of an active/reachable node
     returns: bool - True after the node is removed
     """
-    _get_client(host).nodes.get(node_id).remove(force=force)
+    _get_client(host).nodes.get(id_or_name).remove(force=force)
     return True

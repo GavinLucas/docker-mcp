@@ -310,8 +310,8 @@ def compose_pull(
     want to separate the pull step.
 
     args:
-        project_dir - Dir containing the compose file (default: server cwd)
-        files - Explicit compose file paths, passed as `-f` (overrides auto-discovery)
+        project_dir - Dir with the compose file (default: server cwd)
+        files - Explicit compose file paths (repeatable, `-f`; overrides auto-discovery)
         project_name - Override the compose project name
         services - Pull only these services; omit to pull all
         ignore_pull_failures - Continue if an individual image pull fails
@@ -345,8 +345,8 @@ def compose_restart(
     `stop_timeout_seconds` controls the SIGTERM grace period before Docker sends SIGKILL.
 
     args:
-        project_dir - Dir containing the compose file (default: server cwd)
-        files - Explicit compose file paths, passed as `-f`
+        project_dir - Dir with the compose file (default: server cwd)
+        files - Explicit compose file paths (repeatable, `-f`)
         project_name - Override the compose project name
         services - Restart only these services; omit to restart all
         stop_timeout_seconds - Seconds to wait for graceful stop before SIGKILL

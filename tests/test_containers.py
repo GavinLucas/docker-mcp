@@ -327,6 +327,21 @@ def test_container_wait_uses_finite_default_timeout():
     container.wait.assert_called_once_with(timeout=600, condition="not-running")
 
 
+def test_container_wait_rounds_fractional_timeout_up():
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        container_wait("web", timeout_seconds=0.5)
+    # int() would truncate 0.5 to an immediate 0s daemon timeout; the tool rounds up instead.
+    container.wait.assert_called_once_with(timeout=1, condition="not-running")
+
+
+def test_container_wait_rejects_negative_timeout():
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        container_wait("web", timeout_seconds=-1)
+
+
 def test_container_wait_returns_timed_out_instead_of_raising():
     container = MagicMock()
     container.wait.side_effect = requests.exceptions.ReadTimeout("timed out")

@@ -1,5 +1,6 @@
 # library of mcp tools relating to container management
 
+import math
 import threading
 import time
 from collections.abc import Iterable
@@ -738,13 +739,17 @@ def container_wait(
                      "status", "waited_seconds"}; stop modes fill status_code/error, "healthy" fills
                      health ("starting"/"healthy"/"unhealthy", or null with no healthcheck) and status.
     """
+    if timeout_seconds < 0:
+        raise ValueError(f"timeout_seconds must be >= 0, got {timeout_seconds}.")
     if until == "healthy" and poll_interval <= 0:
         raise ValueError(f"poll_interval must be > 0, got {poll_interval}.")
     container = _get_client(host).containers.get(id_or_name)
     start = time.monotonic()
     if until != "healthy":
         try:
-            result = cast(dict, container.wait(timeout=int(timeout_seconds), condition=until))
+            # The daemon wait takes whole seconds; round up so a small fractional timeout still
+            # waits (int() would truncate 0.5 to an immediate 0s timeout).
+            result = cast(dict, container.wait(timeout=math.ceil(timeout_seconds), condition=until))
         except requests.exceptions.ReadTimeout:
             return _wait_result(id_or_name, until, met=False, start=start, timed_out=True)
         return _wait_result(

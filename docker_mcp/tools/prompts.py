@@ -136,7 +136,9 @@ def monitor_container_fleet(top: int = 5) -> str:
         "Render one table: name, status, CPU%, mem%, and a one-line health note per container, sorted "
         "with problems on top. End with a one-paragraph verdict naming the single container most worth "
         "attention and point at `troubleshoot_container` for a deep dive on it. Recommend nothing "
-        "destructive." + _host_targeting_note()
+        "destructive. If asked to keep watching rather than re-running this sweep on a timer, prefer "
+        '`system_events(filters={"type": "container", "event": "health_status"}, limit=1, '
+        "timeout_seconds=<generous>)` to block until the next relevant event instead." + _host_targeting_note()
     )
 
 

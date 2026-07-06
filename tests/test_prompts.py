@@ -73,6 +73,9 @@ def test_monitor_container_fleet_enumerates_via_resource_and_ranks():
     assert out.index("docker://containers") < out.index("docker-stats://")
     assert "troubleshoot_container" in out  # hands off the deep dive
     assert "destructive" in out.lower() or "read-only" in out.lower()
+    # Points at the wait-for-next-event idiom rather than re-running this sweep on a timer.
+    assert "system_events" in out
+    assert "limit=1" in out
 
 
 def test_monitor_container_fleet_threads_top_argument():

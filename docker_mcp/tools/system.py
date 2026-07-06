@@ -342,6 +342,12 @@ def system_events(
     Caveat for `ssh://` daemons: docker-py can't cancel an SSH stream, so the `timeout_seconds`
     watchdog can't interrupt a fully idle stream — bound with `until`/`limit` (or a non-SSH endpoint).
 
+    "Wait for the next matching event" idiom: pass `limit=1` with `filters` narrowed to what you
+    care about (e.g. `{"type": "container", "event": "health_status"}`) and a generous
+    `timeout_seconds`. This blocks until that one event arrives (or the timeout elapses, returning an
+    empty list) instead of re-polling a snapshot on a timer — there's no separate wait tool for this
+    since the filtering this call already does covers it.
+
     args:
         since - Show events created since this timestamp
         until - Show events created until this timestamp

@@ -434,6 +434,67 @@ def registry_tags(
 
 
 @tool()
+def registry_tag_wait(
+    repository: str,
+    tag: str,
+    username: str | None = None,
+    password: str | None = None,
+    timeout_seconds: float = 600.0,
+    poll_interval: float = 5.0,
+) -> dict:
+    """
+    Block until a specific tag appears in a repository (e.g. waiting for a CI push to land).
+
+    Never raises on timeout — the result always carries `met` and `timed_out`. Polls `registry_tags`
+    every `poll_interval`s and checks whether `tag` is in its result. Works against Docker Hub too
+    (`registry_tags`' own scope covers it), so there is no separate Hub variant. Unlike every other
+    wait tool, this has no `host` argument — registry tools talk HTTPS directly to the registry, not
+    a Docker daemon.
+
+    Caveat: `registry_tags` paginates up to 50 pages (or `limit` tags, default 1000); if `tag` would
+    only appear beyond that window it is never found, even once it exists. Raise `limit` if you expect
+    a very large tag list.
+
+    args:
+        repository - Image/repository ref, e.g. "alpine", "ghcr.io/org/repo"; any `:tag`/`@digest` is stripped
+        tag - The exact tag name to wait for
+        username - Optional registry username (overrides DOCKER_MCP_SERVER_REGISTRY_USERNAME)
+        password - Optional registry password/token (overrides DOCKER_MCP_SERVER_REGISTRY_PASSWORD)
+        timeout_seconds - Max seconds to wait before returning with timed_out=true (default 600)
+        poll_interval - Seconds between re-checks (default 5, > 0); capped by the time left so a
+                        large value can't push the total wait past the timeout
+    returns: dict - {"repository", "tag", "met", "timed_out", "waited_seconds"}
+    """
+    if timeout_seconds < 0:
+        raise ValueError(f"timeout_seconds must be >= 0, got {timeout_seconds}.")
+    if poll_interval <= 0:
+        raise ValueError(f"poll_interval must be > 0, got {poll_interval}.")
+    start = time.monotonic()
+    deadline = start + timeout_seconds
+    while True:
+        result = registry_tags(repository, username=username, password=password)
+        if tag in result["tags"]:
+            return {
+                "repository": repository,
+                "tag": tag,
+                "met": True,
+                "timed_out": False,
+                "waited_seconds": round(time.monotonic() - start, 2),
+            }
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return {
+                "repository": repository,
+                "tag": tag,
+                "met": False,
+                "timed_out": True,
+                "waited_seconds": round(time.monotonic() - start, 2),
+            }
+        # Bound the sleep by the time left so a large poll_interval can't push past the timeout.
+        time.sleep(min(poll_interval, remaining))
+
+
+@tool()
 def registry_manifest(
     repository: str,
     reference: str = "latest",

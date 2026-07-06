@@ -200,6 +200,7 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "scout_sbom": ToolCategory.READ_ONLY,
     # registry (HTTPS, no daemon)
     "registry_tags": ToolCategory.READ_ONLY,
+    "registry_tag_wait": ToolCategory.READ_ONLY,
     "registry_manifest": ToolCategory.READ_ONLY,
     "registry_image_config": ToolCategory.READ_ONLY,
     "hub_tags": ToolCategory.READ_ONLY,

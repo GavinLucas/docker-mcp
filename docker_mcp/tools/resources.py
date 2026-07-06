@@ -5,7 +5,7 @@ import json
 import httpx
 
 import docker_mcp._hosts as _hosts
-from docker_mcp.server import is_domain_disabled, mcp, register_resource_domains, tool_catalog
+from docker_mcp.server import is_domain_disabled, mcp, register_resource_domains, tool, tool_catalog
 from docker_mcp.tools._utils import package_version
 from docker_mcp.tools.system import _get_client, host_list
 from docker_mcp.tools.containers import _read_log_tail, _read_stats_summary
@@ -519,3 +519,29 @@ def get_docs_section(section: str) -> str:
     resp = httpx.get(url, timeout=_DOCS_TIMEOUT, follow_redirects=True, headers={"User-Agent": _USER_AGENT})
     resp.raise_for_status()
     return resp.content.decode("utf-8", errors="replace")
+
+
+@tool()
+def docs_lookup(section: str | None = None) -> str:
+    """
+    Look up Docker SDK/CLI/registry reference documentation by section.
+
+    A tool-callable mirror of the docker-docs:// resources, for clients that can't read MCP
+    resources (e.g. Claude Desktop, Cursor). Always registered regardless of
+    DOCKER_MCP_SERVER_DISABLE — looking something up costs nothing and isn't tied to any single
+    Docker feature area — but an individual section still refuses if the domain it documents is
+    disabled, matching the equivalent `docker-docs://{section}` resource exactly.
+
+    Omit `section` to list every available section with its source URL (same as
+    `docker-docs://contents`); pass a `section` name to fetch that page's content (same as
+    `docker-docs://{section}`). Most useful before constructing an `extra_kwargs`-style passthrough
+    dict for a tool like `container_run`/`container_create`/`service_create` (their docstrings only
+    list common keys, not every key docker-py accepts), or before writing Compose/Dockerfile/buildx
+    bake-file syntax, which no tool generates.
+
+    args: section - Section name (from a no-argument call's index); omit to list all sections instead
+    returns: str - JSON section index (no `section`) or that section's raw HTML/Markdown content
+    """
+    if section is None:
+        return list_docs_sections()
+    return get_docs_section(section)

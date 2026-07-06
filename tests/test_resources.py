@@ -15,6 +15,7 @@ from docker_mcp.tools.resources import (
     DOCKER_DOCS_BASE_URL,
     EXTERNAL_SECTIONS,
     SDK_SECTIONS,
+    docs_lookup,
     get_container_logs_resource,
     get_container_stats_resource,
     get_docs_section,
@@ -146,6 +147,29 @@ def test_get_docs_section_still_serves_enabled_sections_when_another_is_disabled
     ) as mock_get:
         assert get_docs_section("containers") == "<html>containers</html>"
     assert mock_get.call_args.args[0] == f"{DOCKER_DOCS_BASE_URL}/containers.html"
+
+
+# ---------- docs_lookup: tool-callable mirror of the docker-docs:// resources ----------
+
+
+def test_docs_lookup_with_no_section_mirrors_list_docs_sections():
+    assert docs_lookup() == list_docs_sections()
+
+
+def test_docs_lookup_with_section_mirrors_get_docs_section():
+    with patch(
+        "docker_mcp.tools.resources.httpx.get", return_value=_docs_response(b"<html>containers</html>")
+    ) as mock_get:
+        assert docs_lookup("containers") == "<html>containers</html>"
+    assert mock_get.call_args.args[0] == f"{DOCKER_DOCS_BASE_URL}/containers.html"
+
+
+def test_docs_lookup_still_refuses_a_disabled_section(monkeypatch):
+    # The tool itself is un-disablable, but an individual section still respects its own domain's
+    # DOCKER_MCP_SERVER_DISABLE state, exactly like the docker-docs://{section} resource.
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"scout"}))
+    with pytest.raises(ValueError, match="disabled via DOCKER_MCP_SERVER_DISABLE"):
+        docs_lookup("scout")
 
 
 # ---------- container observability resources (docker://containers, docker-logs://, docker-stats://) ----------

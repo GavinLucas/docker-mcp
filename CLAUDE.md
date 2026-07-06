@@ -260,6 +260,19 @@ def mcp_example(name: str):
 - Keep descriptions terse: state every functional fact (defaults, accepted formats/values, return
   keys, important caveats) but cut redundancy and verbose phrasing. The docstring is the entire
   tool `description` the client pays tokens for on every session.
+- **A one-line summary + bare `args`/`returns` is not enough for any tool with non-obvious
+  behavior.** If the tool has side effects, preconditions, a non-obvious failure mode, or overlaps
+  with another tool a caller could reach for instead, add a short paragraph (2-5 sentences,
+  between the summary and `args:`) covering: when to use it vs. the alternative, side
+  effects/preconditions, and concrete parameter formats/values — not just restating the signature.
+  This directly maps to what a low-scoring tool is missing on Glama's per-tool quality rubric
+  (`Behavior`, `Usage Guidelines`, `Parameters` sub-scores) — see [[project_glama_docstring_quality]]
+  in memory for the three rounds of cleanup (#97, the 2.0 rename, #129) this has already taken to
+  chase down thin docstrings written without this paragraph. **Write it this way the first time a
+  tool is added or its behavior changes** — don't wait for a future Glama pass to catch it. Verify
+  every factual claim in that paragraph against the live docker-py docs / Engine API spec per the
+  Docker SDK Policy below — an unverified claim about identifier semantics (e.g. "name or id" for a
+  resource actually addressed by name only) is exactly the kind of thing PR review catches late.
 
 ### MCP resources
 

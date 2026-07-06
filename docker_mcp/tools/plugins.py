@@ -7,10 +7,14 @@ from docker_mcp.tools.system import _get_client
 @tool()
 def plugin_inspect(name: str, host: str | None = None) -> dict:
     """
-    Get an installed plugin by name.
+    Return the full attrs for a single installed plugin.
 
-    args: name - The plugin name
-    returns: dict - The plugin's attrs
+    Use this to check a plugin's `Enabled` state before calling `plugin_enable` /
+    `plugin_disable`, or to read the config keys it exposes under `Settings.Env` before
+    calling `plugin_configure`. For the set of all installed plugins use `plugin_list`.
+
+    args: name - Plugin name, e.g. "vieux/sshfs:latest"
+    returns: dict - The plugin's attrs, including `Enabled` and `Settings`
     """
     return _get_client(host).plugins.get(name).attrs
 
@@ -56,7 +60,7 @@ def plugin_configure(name: str, options: dict, host: str | None = None) -> bool:
     currently active, then `plugin_enable` afterwards to apply the new settings.
 
     args:
-        name - Plugin name or id (e.g. "vieux/sshfs:latest")
+        name - Plugin name, e.g. "vieux/sshfs:latest"
         options - Key/value settings to apply, matching the plugin's declared env keys
     returns: bool - True after configuration
     """
@@ -75,7 +79,7 @@ def plugin_disable(name: str, force: bool = False, host: str | None = None) -> b
     resources (e.g. a volume driver). Re-enable with `plugin_enable`.
 
     args:
-        name - Plugin name or id
+        name - The plugin name
         force - Disable even if active containers are using the plugin (may disrupt them)
     returns: bool - True after the plugin is disabled
     """
@@ -95,7 +99,7 @@ def plugin_enable(name: str, timeout_seconds: int = 0, host: str | None = None) 
     0 means wait indefinitely.
 
     args:
-        name - Plugin name or id to enable
+        name - The plugin name to enable
         timeout_seconds - Seconds to wait for the plugin to become healthy (0 = no timeout)
     returns: bool - True after the plugin is enabled
     """
@@ -120,11 +124,17 @@ def plugin_remove(name: str, force: bool = False, host: str | None = None) -> bo
 @tool()
 def plugin_upgrade(name: str, remote: str | None = None, host: str | None = None) -> bool:
     """
-    Upgrade a plugin.
+    Upgrade an installed plugin to a newer version.
+
+    The plugin must be disabled first — call `plugin_disable` before this, then
+    `plugin_enable` afterwards to bring it back up. `remote` lets you upgrade to a
+    different reference (e.g. a newer tag) than the plugin's current name; omit it to
+    re-pull the same reference. Existing settings and volumes created by the plugin
+    persist across the upgrade.
 
     args:
-        name - The plugin name
-        remote - Remote reference to upgrade from (defaults to current name)
+        name - The plugin name to upgrade
+        remote - Reference to upgrade to, e.g. "vieux/sshfs:next" (default: same as name)
     returns: bool - True after the upgrade completes
     """
     plugin = _get_client(host).plugins.get(name)

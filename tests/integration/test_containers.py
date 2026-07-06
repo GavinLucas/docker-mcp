@@ -51,6 +51,30 @@ def test_container_wait_healthy_real(healthy_container):
     assert result["timed_out"] is False
 
 
+@pytest.fixture
+def log_emitting_container():
+    """Run a container that sleeps briefly then logs a marker line; remove it afterwards."""
+    name = f"dmcp-it-{uuid.uuid4().hex[:8]}"
+    try:
+        container_run(
+            "alpine:3",
+            command=["sh", "-c", "sleep 2; echo READY_MARKER; sleep 120"],
+            name=name,
+        )
+    except Exception as exc:  # noqa: BLE001 — image pull / run can fail on a constrained CI; skip cleanly
+        pytest.skip(f"could not start the log-emitting container (pull/run failed?): {exc}")
+    yield name
+    container_remove(name, force=True)
+
+
+def test_container_wait_log_match_real(log_emitting_container):
+    result = container_wait(
+        log_emitting_container, until="log-match", pattern="READY_MARKER", timeout_seconds=15, poll_interval=0.5
+    )
+    assert result["met"] is True
+    assert result["matched_line"] == "READY_MARKER"
+
+
 def test_run_container_stamps_provenance_and_managed_only_filters(healthy_container):
     # The container started by the fixture should carry the managed label by default,
     # and `managed_only=True` should be able to find it.

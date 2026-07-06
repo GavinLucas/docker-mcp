@@ -1,6 +1,7 @@
 # library of mcp tools relating to container management
 
 import math
+import re
 import threading
 import time
 from collections.abc import Iterable
@@ -706,6 +707,7 @@ def _wait_result(
     error: str | None = None,
     health: str | None = None,
     status: str | None = None,
+    matched_line: str | None = None,
 ) -> dict:
     """Build the unified container_wait result snapshot — the same shape for every `until` mode."""
     return {
@@ -717,48 +719,70 @@ def _wait_result(
         "error": error,
         "health": health,
         "status": status,
+        "matched_line": matched_line,
         "waited_seconds": round(time.monotonic() - start, 2),
     }
+
+
+# Cap each log-match poll's read so a chatty container can't grow the buffer we search unbounded.
+_LOG_MATCH_TAIL_LINES = 1000
 
 
 @tool()
 def container_wait(
     id_or_name: str,
-    until: Literal["not-running", "next-exit", "removed", "healthy"] = "not-running",
+    until: Literal["not-running", "next-exit", "removed", "healthy", "log-match"] = "not-running",
     timeout_seconds: float = 600.0,
     poll_interval: float = 2.0,
+    pattern: str | None = None,
+    regex: bool = False,
     host: str | None = None,
 ) -> dict:
     """
-    Block until a container reaches a condition: stopped ("not-running"/"next-exit"/"removed") or "healthy".
+    Block until a container reaches a condition: stopped, "healthy", or its logs contain a pattern.
 
     One contract for every mode: never raises on timeout — the result always carries `met` (condition
-    reached) and `timed_out`. The stop conditions use the daemon's blocking wait and fill `status_code`/
-    `error` (the container's exit info); "healthy" polls the container's HEALTHCHECK every
-    `poll_interval`s and fills `health`/`status`.
+    reached) and `timed_out`. The stop conditions ("not-running"/"next-exit"/"removed") use the
+    daemon's blocking wait and fill `status_code`/`error` (the container's exit info); "healthy" polls
+    the container's HEALTHCHECK every `poll_interval`s and fills `health`/`status`; "log-match" polls
+    recent logs every `poll_interval`s for `pattern` and fills `matched_line`.
 
     Health semantics: with no HEALTHCHECK defined, once the container is `running` the tool returns
     promptly with `health: null` and `met: false` (false = "not confirmed healthy", not "unhealthy" —
     check `health` to tell them apart). A container that exits before becoming healthy returns its
     terminal `status` and `met: false`.
 
+    Log-match semantics: `pattern` is matched as a **plain substring** by default — safe against any
+    input, including adversarial ones. Pass `regex=True` to match `pattern` as a regular expression
+    (via `re.search`) instead; only do this with patterns you trust, since a regex with catastrophic
+    backtracking run against attacker-influenced log content can exhaust CPU (ReDoS). Checks stdout
+    and stderr, most recent lines first within each poll.
+
     args:
         id_or_name - The container id or name
-        until - Condition to wait for: "not-running" (default), "next-exit", "removed", or "healthy"
+        until - Condition to wait for: "not-running" (default), "next-exit", "removed", "healthy",
+                or "log-match" (requires `pattern`)
         timeout_seconds - Max seconds to wait before returning with timed_out=true (default 600)
-        poll_interval - "healthy" mode only: seconds between re-inspections (default 2, > 0); capped by
-                        the time left so a large value can't push the total wait past the timeout
+        poll_interval - "healthy"/"log-match" only: seconds between re-checks (default 2, > 0);
+                        capped by the time left so a large value can't push the total wait past the
+                        timeout
+        pattern - "log-match" only: substring (or, with `regex=True`, a regular expression) to look
+                  for in the container's logs
+        regex - "log-match" only: treat `pattern` as a regular expression instead of a plain substring
     returns: dict - {"container", "until", "met", "timed_out", "status_code", "error", "health",
-                     "status", "waited_seconds"}; stop modes fill status_code/error, "healthy" fills
-                     health ("starting"/"healthy"/"unhealthy", or null with no healthcheck) and status.
+                     "status", "matched_line", "waited_seconds"}; stop modes fill status_code/error,
+                     "healthy" fills health ("starting"/"healthy"/"unhealthy", or null with no
+                     healthcheck) and status, "log-match" fills matched_line when met.
     """
     if timeout_seconds < 0:
         raise ValueError(f"timeout_seconds must be >= 0, got {timeout_seconds}.")
-    if until == "healthy" and poll_interval <= 0:
+    if until in ("healthy", "log-match") and poll_interval <= 0:
         raise ValueError(f"poll_interval must be > 0, got {poll_interval}.")
+    if until == "log-match" and not pattern:
+        raise ValueError("`pattern` is required when until='log-match'.")
     container = _get_client(host).containers.get(id_or_name)
     start = time.monotonic()
-    if until != "healthy":
+    if until not in ("healthy", "log-match"):
         try:
             # The daemon wait takes whole seconds; round up so a small fractional timeout still
             # waits (int() would truncate 0.5 to an immediate 0s timeout).
@@ -774,27 +798,43 @@ def container_wait(
             error=(result.get("Error") or {}).get("Message") if isinstance(result.get("Error"), dict) else None,
         )
     deadline = start + timeout_seconds
-    while True:
-        container.reload()
-        state = container.attrs.get("State", {}) or {}
-        status = state.get("Status")  # created / running / exited / dead / paused / restarting
-        health = (state.get("Health") or {}).get("Status")  # starting / healthy / unhealthy, or None
+    if until == "healthy":
+        while True:
+            container.reload()
+            state = container.attrs.get("State", {}) or {}
+            status = state.get("Status")  # created / running / exited / dead / paused / restarting
+            health = (state.get("Health") or {}).get("Status")  # starting / healthy / unhealthy, or None
 
-        if health == "healthy":
-            return _wait_result(id_or_name, until, met=True, start=start, health=health, status=status)
-        if health == "unhealthy":
-            return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
-        if status in ("exited", "dead"):
-            # Stopped before ever becoming healthy.
-            return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
-        if health is None and status == "running":
-            # No HEALTHCHECK defined: there's nothing to converge to, so don't poll to the timeout.
-            return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
-        # Otherwise still settling (health "starting", or status created/restarting/paused): keep polling.
+            if health == "healthy":
+                return _wait_result(id_or_name, until, met=True, start=start, health=health, status=status)
+            if health == "unhealthy":
+                return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
+            if status in ("exited", "dead"):
+                # Stopped before ever becoming healthy.
+                return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
+            if health is None and status == "running":
+                # No HEALTHCHECK defined: there's nothing to converge to, so don't poll to the timeout.
+                return _wait_result(id_or_name, until, met=False, start=start, health=health, status=status)
+            # Otherwise still settling (health "starting", or status created/restarting/paused): keep polling.
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return _wait_result(
+                    id_or_name, until, met=False, start=start, timed_out=True, health=health, status=status
+                )
+            # Bound the sleep by the time left so a large poll_interval can't push past the timeout.
+            time.sleep(min(poll_interval, remaining))
+    # "log-match"
+    matcher = (lambda line: re.search(cast(str, pattern), line)) if regex else (lambda line: pattern in line)
+    while True:
+        output = container.logs(stdout=True, stderr=True, stream=False, tail=_LOG_MATCH_TAIL_LINES)
+        text = output.decode("utf-8", errors="replace") if isinstance(output, bytes) else str(output)
+        for line in reversed(text.splitlines()):
+            if matcher(line):
+                return _wait_result(id_or_name, until, met=True, start=start, matched_line=line)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            return _wait_result(id_or_name, until, met=False, start=start, timed_out=True, health=health, status=status)
-        # Bound the sleep by the time left so a large poll_interval can't block past the timeout.
+            return _wait_result(id_or_name, until, met=False, start=start, timed_out=True)
+        # Bound the sleep by the time left so a large poll_interval can't push past the timeout.
         time.sleep(min(poll_interval, remaining))
 
 

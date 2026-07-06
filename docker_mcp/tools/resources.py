@@ -9,6 +9,7 @@ from docker_mcp.server import is_domain_disabled, mcp, register_resource_domains
 from docker_mcp.tools._utils import package_version
 from docker_mcp.tools.system import _get_client, host_list
 from docker_mcp.tools.containers import _read_log_tail, _read_stats_summary
+from docker_mcp.tools.services import _read_service_log_tail, _read_service_task_summary
 
 DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
 
@@ -315,6 +316,190 @@ else:
     mcp.resource("docker://containers", mime_type="application/json")(list_container_resources)
     mcp.resource("docker-logs://{id_or_name}", mime_type="text/plain")(get_container_logs_resource)
     mcp.resource("docker-stats://{id_or_name}", mime_type="application/json")(get_container_stats_resource)
+
+
+# Service observability resources. Same pattern as the container resources above (domain gate,
+# index renderer, private read-helpers on services.py), gated on the `services` domain.
+_SERVICES_DOMAIN = "services"
+
+
+def _require_services_domain() -> None:
+    """Refuse a service resource read when the `services` domain is disabled via DOCKER_MCP_SERVER_DISABLE."""
+    if is_domain_disabled(_SERVICES_DOMAIN):
+        raise ValueError(
+            "Service observability resources are unavailable because the 'services' domain is "
+            "disabled via DOCKER_MCP_SERVER_DISABLE."
+        )
+
+
+def _render_services_index(host: str | None) -> str:
+    _require_services_domain()
+    entries = []
+    for service in _get_client(host).services.list():
+        spec = service.attrs.get("Spec", {}) or {}
+        mode = spec.get("Mode", {}) or {}
+        container_spec = (spec.get("TaskTemplate", {}) or {}).get("ContainerSpec", {}) or {}
+        ref = service.name or service.short_id
+        entries.append(
+            {
+                "id": service.short_id,
+                "name": service.name,
+                "image": container_spec.get("Image"),
+                "mode": "replicated" if "Replicated" in mode else ("global" if "Global" in mode else None),
+                "desired_replicas": mode.get("Replicated", {}).get("Replicas") if "Replicated" in mode else None,
+                "logs": _child_uri("service-logs", ref, host),
+                "tasks": _child_uri("service-tasks", ref, host),
+            }
+        )
+    return json.dumps({"services": entries}, indent=2)
+
+
+def list_service_resources() -> str:
+    """
+    Index every swarm service with the resource URIs for reading its logs and task/rollout status.
+
+    returns: str - JSON object {"services": [{id, name, image, mode, desired_replicas, logs, tasks}, ...]}
+    """
+    return _render_services_index(None)
+
+
+def list_host_service_resources(host: str) -> str:
+    """
+    Index every swarm service on a named host (the host-qualified service index).
+
+    args: host - Configured host label (from the docker-mcp://hosts resource)
+    returns: str - JSON object {"services": [...]}
+    """
+    return _render_services_index(host)
+
+
+def get_service_logs_resource(id_or_name: str) -> str:
+    """
+    Read a bounded tail of a swarm service's combined stdout/stderr logs.
+
+    args: id_or_name - The service id or name (from the service index)
+    returns: str - The decoded recent log tail
+    """
+    _require_services_domain()
+    return _read_service_log_tail(id_or_name)
+
+
+def get_host_service_logs_resource(host: str, id_or_name: str) -> str:
+    """
+    Read a bounded log tail for a swarm service on a named host (host-qualified service-logs variant).
+
+    args:
+        host - Configured host label (from the docker-mcp://hosts resource)
+        id_or_name - The service id or name (from that host's index)
+    returns: str - The decoded recent log tail
+    """
+    _require_services_domain()
+    return _read_service_log_tail(id_or_name, host=host)
+
+
+def get_service_tasks_resource(id_or_name: str) -> str:
+    """
+    Read a computed task/rollout status summary for a swarm service.
+
+    Returns running vs. desired task counts, any failing tasks (id, node, error), and the current
+    rolling-update state if one is in progress — the "is this service OK right now" signal, since a
+    service has no cgroup-style stats of its own.
+
+    args: id_or_name - The service id or name (from the service index)
+    returns: str - JSON {service, mode, running_tasks, desired_tasks, failed_tasks, update_state}
+    """
+    _require_services_domain()
+    return json.dumps(_read_service_task_summary(id_or_name), indent=2)
+
+
+def get_host_service_tasks_resource(host: str, id_or_name: str) -> str:
+    """
+    Task/rollout status summary for a swarm service on a named host (host-qualified variant).
+
+    args:
+        host - Configured host label (from the docker-mcp://hosts resource)
+        id_or_name - The service id or name (from that host's index)
+    returns: str - JSON summary (same shape as service-tasks://{id_or_name})
+    """
+    _require_services_domain()
+    return json.dumps(_read_service_task_summary(id_or_name, host=host), indent=2)
+
+
+if _hosts.is_multi():
+    mcp.resource("docker:///services", mime_type="application/json")(list_service_resources)
+    mcp.resource("docker://{host}/services", mime_type="application/json")(list_host_service_resources)
+    mcp.resource("service-logs:///{id_or_name}", mime_type="text/plain")(get_service_logs_resource)
+    mcp.resource("service-logs://{host}/{id_or_name}", mime_type="text/plain")(get_host_service_logs_resource)
+    mcp.resource("service-tasks:///{id_or_name}", mime_type="application/json")(get_service_tasks_resource)
+    mcp.resource("service-tasks://{host}/{id_or_name}", mime_type="application/json")(get_host_service_tasks_resource)
+else:
+    mcp.resource("docker://services", mime_type="application/json")(list_service_resources)
+    mcp.resource("service-logs://{id_or_name}", mime_type="text/plain")(get_service_logs_resource)
+    mcp.resource("service-tasks://{id_or_name}", mime_type="application/json")(get_service_tasks_resource)
+
+
+# Node observability resource. Index only (see CLAUDE.md for why: a per-node child resource would
+# need an expensive per-service task fan-out with no single cheap call, unlike containers/services).
+_NODES_DOMAIN = "nodes"
+
+
+def _require_nodes_domain() -> None:
+    """Refuse a node resource read when the `nodes` domain is disabled via DOCKER_MCP_SERVER_DISABLE."""
+    if is_domain_disabled(_NODES_DOMAIN):
+        raise ValueError(
+            "Node observability resources are unavailable because the 'nodes' domain is disabled "
+            "via DOCKER_MCP_SERVER_DISABLE."
+        )
+
+
+def _render_nodes_index(host: str | None) -> str:
+    _require_nodes_domain()
+    entries = []
+    for node in _get_client(host).nodes.list():
+        attrs = node.attrs
+        status = attrs.get("Status", {}) or {}
+        spec = attrs.get("Spec", {}) or {}
+        manager_status = attrs.get("ManagerStatus") or {}
+        entries.append(
+            {
+                "id": node.short_id,
+                "hostname": (attrs.get("Description", {}) or {}).get("Hostname"),
+                "state": status.get("State"),
+                "availability": spec.get("Availability"),
+                "role": spec.get("Role"),
+                "manager_reachability": manager_status.get("Reachability"),
+            }
+        )
+    return json.dumps({"nodes": entries}, indent=2)
+
+
+def list_node_resources() -> str:
+    """
+    Index every swarm node with its state, availability, role, and (for managers) reachability.
+
+    Index only — no per-node child resource. Watch this to notice a node flapping between
+    ready/down, or an unexpected availability/role change, without re-querying `node_list`.
+
+    returns: str - JSON object {"nodes": [{id, hostname, state, availability, role, manager_reachability}, ...]}
+    """
+    return _render_nodes_index(None)
+
+
+def list_host_node_resources(host: str) -> str:
+    """
+    Index every swarm node on a named host (the host-qualified node index).
+
+    args: host - Configured host label (from the docker-mcp://hosts resource)
+    returns: str - JSON object {"nodes": [...]}
+    """
+    return _render_nodes_index(host)
+
+
+if _hosts.is_multi():
+    mcp.resource("docker:///nodes", mime_type="application/json")(list_node_resources)
+    mcp.resource("docker://{host}/nodes", mime_type="application/json")(list_host_node_resources)
+else:
+    mcp.resource("docker://nodes", mime_type="application/json")(list_node_resources)
 
 
 @mcp.resource("docker-docs://{section}", mime_type="text/html")

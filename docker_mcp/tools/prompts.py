@@ -73,7 +73,10 @@ def deploy_container(image: str, name: str) -> str:
         f"`network_create` / `volume_create` if so.\n"
         f"3. Call `container_run` with sensible defaults: `detach=True`, a restart policy, and any port or volume "
         f"mappings the image requires.\n"
-        f"4. Verify the container reached the running state with `container_list` and `container_logs`.\n"
+        f'4. Call `container_wait(id_or_name=name, until="healthy")` to confirm it started successfully. '
+        f"`met=True` means the image's HEALTHCHECK passed; `health: null` with `met=False` just means the image "
+        f'has no HEALTHCHECK (not that something is wrong) — check `status == "running"` instead. Follow up '
+        f"with `container_logs` if anything looks off.\n"
         f"Report the final container ID and any resources you created. Stop and ask before destroying existing "
         f"resources that share the same name."
     )
@@ -133,7 +136,9 @@ def monitor_container_fleet(top: int = 5) -> str:
         "Render one table: name, status, CPU%, mem%, and a one-line health note per container, sorted "
         "with problems on top. End with a one-paragraph verdict naming the single container most worth "
         "attention and point at `troubleshoot_container` for a deep dive on it. Recommend nothing "
-        "destructive." + _host_targeting_note()
+        "destructive. If asked to keep watching rather than re-running this sweep on a timer, prefer "
+        '`system_events(filters={"type": "container", "event": "health_status"}, limit=1, '
+        "timeout_seconds=<generous>)` to block until the next relevant event instead." + _host_targeting_note()
     )
 
 
@@ -197,9 +202,11 @@ def migrate_container(container: str, new_image: str) -> str:
         f"rollback target.\n"
         f"4. Use `container_run` to start a new container under the original name `{container}` with the "
         f"captured config but the new image.\n"
-        f"5. Verify with `container_list` and `container_logs` that the replacement is healthy. If it is "
-        f"NOT, roll back: `container_stop`/`container_remove` the new one and `container_rename` "
-        f"`{container}-old` back to `{container}`, then `container_start`.\n"
+        f'5. Call `container_wait(id_or_name="{container}", until="healthy")` to confirm the replacement is '
+        f'healthy — `health: null` means no HEALTHCHECK is defined (not unhealthy); treat `status == "running"` '
+        f'as success in that case. If it instead comes back `health == "unhealthy"`, or the container exited '
+        f"before becoming healthy, roll back: `container_stop`/`container_remove` the new one and "
+        f"`container_rename` `{container}-old` back to `{container}`, then `container_start`.\n"
         f"6. Only once the replacement is confirmed healthy, `container_remove` `{container}-old`. Ask "
         f"the user before this final removal — it discards the rollback path."
     )
@@ -433,7 +440,10 @@ def audit_swarm_health() -> str:
         "5. If a node is drained and should be removed, note that `node_remove` (force only if it is "
         "still reachable) is the follow-up — but do not call it as part of this audit.\n"
         "Summarize as a table: nodes (state/availability/role/reachability) and services (desired vs "
-        "running, status). End with a one-paragraph health verdict and the single most urgent fix."
+        "running, status). End with a one-paragraph health verdict and the single most urgent fix. "
+        "If anything looks mid-convergence (a node that just joined, a service you'd expect to still "
+        "be scaling or rolling out), mention `node_wait` / `service_wait` as the way to block on it "
+        "settling, rather than re-running this audit on a timer — but this audit itself stays read-only."
     )
 
 
@@ -873,10 +883,11 @@ def deploy_swarm_stack(stack_name: str, compose_file: str) -> str:
         f'3. Deploy with `stack_deploy(name="{stack_name}", compose_files=["{compose_file}"])`. Add '
         f"`with_registry_auth=True` if any image is private, and `prune=True` only if the user wants "
         f"services removed when they leave the Compose file. Check the returned `returncode`/`stderr`.\n"
-        f'4. Verify convergence: `stack_services(name="{stack_name}")` and confirm each service\'s '
-        f"running replicas match its desired count. For any under-replicated service, "
-        f'`stack_ps(name="{stack_name}", filters=["desired-state=running"])` and look for tasks '
-        f"stuck in `rejected`/`failed` — pull the task error.\n"
+        f'4. Verify convergence: call `stack_services(name="{stack_name}")` to get each service\'s full '
+        f'name (`{stack_name}_<service>`), then `service_wait(id_or_name=<full-name>, until="running")` '
+        f"per service to block until it converges instead of polling by hand. For any that comes back "
+        f"`met=False`/`timed_out=True`, its `failed_tasks` already lists the stuck task ids/errors — or "
+        f'call `stack_ps(name="{stack_name}", filters=["desired-state=running"])` for the same view.\n'
         f"5. Re-running `stack_deploy` with the same name updates the stack in place, so iterate on the "
         f"Compose file and redeploy rather than removing first. Mention `stack_remove` as the teardown, but "
         f"do not call it.\n"

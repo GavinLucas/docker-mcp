@@ -114,6 +114,7 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "node_list": ToolCategory.READ_ONLY,
     "node_update": ToolCategory.MUTATING,
     "node_remove": ToolCategory.DESTRUCTIVE,
+    "node_wait": ToolCategory.READ_ONLY,
     # services
     "service_create": ToolCategory.MUTATING,
     "service_inspect": ToolCategory.READ_ONLY,
@@ -124,6 +125,7 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "service_logs": ToolCategory.READ_ONLY,
     "service_scale": ToolCategory.MUTATING,
     "service_rollback": ToolCategory.MUTATING,
+    "service_wait": ToolCategory.READ_ONLY,
     # swarm
     "swarm_init": ToolCategory.MUTATING,
     "swarm_join": ToolCategory.MUTATING,
@@ -198,6 +200,7 @@ TOOL_CATEGORIES: dict[str, ToolCategory] = {
     "scout_sbom": ToolCategory.READ_ONLY,
     # registry (HTTPS, no daemon)
     "registry_tags": ToolCategory.READ_ONLY,
+    "registry_tag_wait": ToolCategory.READ_ONLY,
     "registry_manifest": ToolCategory.READ_ONLY,
     "registry_image_config": ToolCategory.READ_ONLY,
     "hub_tags": ToolCategory.READ_ONLY,

@@ -1,5 +1,6 @@
 # library of mcp tools relating to swarm service management
 
+import time
 from collections.abc import Iterable
 from typing import Literal, cast
 
@@ -7,6 +8,69 @@ from docker_mcp.server import tool
 from docker_mcp.tools._labels import managed_filter, with_provenance
 from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded
 from docker_mcp.tools.system import _get_client
+
+
+# --- shared read helpers, also used by the service-logs:// / service-tasks:// resources in
+# resources.py, and by service_wait's "running" mode ---
+
+_FAILING_TASK_STATES = frozenset({"failed", "rejected"})
+
+
+def _read_service_log_tail(id_or_name: str, tail: int = 200, host: str | None = None) -> str:
+    """Return a bounded, non-streaming tail of a swarm service's combined stdout/stderr logs."""
+    service = _get_client(host).services.get(id_or_name)
+    output = service.logs(stdout=True, stderr=True, follow=False, tail=tail)
+
+    def _as_bytes(chunks: Iterable) -> Iterable[bytes]:
+        for chunk in chunks:
+            yield chunk if isinstance(chunk, bytes) else str(chunk).encode("utf-8", errors="replace")
+
+    raw = join_bounded(_as_bytes(cast(Iterable, output)), MAX_PAYLOAD_BYTES, f"logs of service {id_or_name}")
+    return raw.decode("utf-8", errors="replace")
+
+
+def _read_service_task_summary(id_or_name: str, host: str | None = None) -> dict:
+    """
+    Return a computed task/rollout status summary for a swarm service.
+
+    Reproduces what the `audit_swarm_health` prompt already does by hand: counts tasks whose
+    *desired* state is "running" by their actual `Status.State`, compares the count against the
+    service's desired replica count (Replicated mode) or the total returned tasks (Global mode —
+    one task per eligible node, no fixed target), and surfaces any failing tasks' id/node/error.
+    Also includes `UpdateStatus.State` from the same service read, so this one summary doubles as
+    a rollout-progress view.
+    """
+    service = _get_client(host).services.get(id_or_name)
+    attrs = service.attrs
+    mode = (attrs.get("Spec", {}) or {}).get("Mode", {}) or {}
+    tasks = service.tasks(filters={"desired-state": "running"})
+    running = sum(1 for t in tasks if (t.get("Status") or {}).get("State") == "running")
+    # `Replicas` is optional in the daemon's own schema (no documented default), so a Replicated
+    # service could in principle omit it — fall back to the observed task count in that case too,
+    # the same fallback already used for every non-Replicated mode.
+    desired = mode.get("Replicated", {}).get("Replicas") if "Replicated" in mode else None
+    if desired is None:
+        desired = len(tasks)
+    failed_tasks = [
+        {
+            "id": t.get("ID"),
+            "node_id": t.get("NodeID"),
+            "state": (t.get("Status") or {}).get("State"),
+            "err": (t.get("Status") or {}).get("Err"),
+            "message": (t.get("Status") or {}).get("Message"),
+        }
+        for t in tasks
+        if (t.get("Status") or {}).get("State") in _FAILING_TASK_STATES or (t.get("Status") or {}).get("Err")
+    ]
+    update_status = attrs.get("UpdateStatus") or {}
+    return {
+        "service": service.name,
+        "mode": "replicated" if "Replicated" in mode else ("global" if "Global" in mode else None),
+        "running_tasks": running,
+        "desired_tasks": desired,
+        "failed_tasks": failed_tasks,
+        "update_state": update_status.get("State"),
+    }
 
 
 @tool()
@@ -229,3 +293,95 @@ def service_rollback(id_or_name: str, host: str | None = None) -> dict:
         endpoint_spec=previous.get("EndpointSpec"),
         fetch_current_spec=False,
     )
+
+
+def _service_wait_result(
+    id_or_name: str,
+    until: str,
+    *,
+    met: bool,
+    start: float,
+    timed_out: bool = False,
+    running_tasks: int | None = None,
+    desired_tasks: int | None = None,
+    failed_tasks: list | None = None,
+    update_state: str | None = None,
+) -> dict:
+    """Build the unified service_wait result snapshot — the same shape for every `until` mode."""
+    return {
+        "service": id_or_name,
+        "until": until,
+        "met": met,
+        "timed_out": timed_out,
+        "running_tasks": running_tasks,
+        "desired_tasks": desired_tasks,
+        "failed_tasks": failed_tasks if failed_tasks is not None else [],
+        "update_state": update_state,
+        "waited_seconds": round(time.monotonic() - start, 2),
+    }
+
+
+@tool()
+def service_wait(
+    id_or_name: str,
+    until: Literal["running", "update-converged"] = "running",
+    replicas: int | None = None,
+    timeout_seconds: float = 600.0,
+    poll_interval: float = 2.0,
+    host: str | None = None,
+) -> dict:
+    """
+    Block until a swarm service's tasks converge, or a rolling update finishes.
+
+    One contract for both modes: never raises on timeout — the result always carries `met` and
+    `timed_out`. "running" polls task state via the same task-counting logic as
+    `service-tasks://{id_or_name}` (not the unconfirmed daemon `ServiceStatus` field) until running
+    tasks reach the desired count (Replicated mode) or every returned task is running (Global mode,
+    which has no fixed target). "update-converged" polls `UpdateStatus.State` until it reaches a
+    terminal value (`completed` or `rollback_completed`); if the service has never been updated (no
+    `UpdateStatus` at all), returns promptly with `met=false` — there's nothing to converge to, same
+    as `container_wait`'s no-healthcheck case.
+
+    args:
+        id_or_name - The service id or name
+        until - Condition to wait for: "running" (default) or "update-converged"
+        replicas - "running" mode only: override the desired replica count (e.g. right after a
+                   same-turn `service_scale` call, before polling reflects the new target)
+        timeout_seconds - Max seconds to wait before returning with timed_out=true (default 600)
+        poll_interval - Seconds between re-checks (default 2, > 0); capped by the time left so a
+                        large value can't push the total wait past the timeout
+    returns: dict - {"service", "until", "met", "timed_out", "running_tasks", "desired_tasks",
+                     "failed_tasks", "update_state", "waited_seconds"}
+    """
+    if timeout_seconds < 0:
+        raise ValueError(f"timeout_seconds must be >= 0, got {timeout_seconds}.")
+    if poll_interval <= 0:
+        raise ValueError(f"poll_interval must be > 0, got {poll_interval}.")
+    if replicas is not None and replicas < 0:
+        raise ValueError(f"replicas must be >= 0, got {replicas}.")
+    start = time.monotonic()
+    deadline = start + timeout_seconds
+    while True:
+        summary = _read_service_task_summary(id_or_name, host=host)
+        desired = replicas if (replicas is not None and until == "running") else summary["desired_tasks"]
+        common = {
+            "running_tasks": summary["running_tasks"],
+            "desired_tasks": desired,
+            "failed_tasks": summary["failed_tasks"],
+            "update_state": summary["update_state"],
+        }
+        if until == "running":
+            if summary["running_tasks"] >= desired:
+                return _service_wait_result(id_or_name, until, met=True, start=start, **common)
+        else:  # "update-converged"
+            update_state = summary["update_state"]
+            if update_state is None:
+                # No UpdateStatus at all: nothing to converge to, don't poll to the timeout.
+                return _service_wait_result(id_or_name, until, met=False, start=start, **common)
+            if update_state in ("completed", "rollback_completed"):
+                return _service_wait_result(id_or_name, until, met=True, start=start, **common)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return _service_wait_result(id_or_name, until, met=False, start=start, timed_out=True, **common)
+        # Bound the sleep by the time left so a large poll_interval can't block past the timeout.
+        time.sleep(min(poll_interval, remaining))

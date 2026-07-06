@@ -50,7 +50,10 @@ def test_deploy_container_lists_steps_in_order():
     assert "nginx:1.27" in out
     assert "web" in out
     assert out.index("image_pull") < out.index("container_run")
-    assert "container_list" in out
+    assert out.index("container_run") < out.index("container_wait")
+    assert "container_logs" in out
+    # health:null (no HEALTHCHECK) must not be conflated with unhealthy
+    assert "no HEALTHCHECK" in out
 
 
 def test_troubleshoot_container_covers_logs_and_state():
@@ -70,6 +73,9 @@ def test_monitor_container_fleet_enumerates_via_resource_and_ranks():
     assert out.index("docker://containers") < out.index("docker-stats://")
     assert "troubleshoot_container" in out  # hands off the deep dive
     assert "destructive" in out.lower() or "read-only" in out.lower()
+    # Points at the wait-for-next-event idiom rather than re-running this sweep on a timer.
+    assert "system_events" in out
+    assert "limit=1" in out
 
 
 def test_monitor_container_fleet_threads_top_argument():
@@ -107,9 +113,12 @@ def test_migrate_container_preserves_config_with_rename_rollback():
     assert out.index("container_inspect") < out.index("container_stop")
     assert out.index("container_stop") < out.index("container_rename")
     assert out.index("container_rename") < out.index("container_run")
-    assert out.index("container_run") < out.rindex("container_remove")
+    assert out.index("container_run") < out.index("container_wait")
+    assert out.index("container_wait") < out.rindex("container_remove")
     assert "api-1-old" in out
     assert "rollback" in out.lower()
+    # health:null (no HEALTHCHECK) must not be conflated with unhealthy
+    assert "not unhealthy" in out
 
 
 def test_clean_environment_default_scope_skips_volumes():
@@ -204,6 +213,11 @@ def test_audit_swarm_health_covers_nodes_services_and_tasks():
     assert out.index("node_list") < out.index("service_ps")
     # Read-only audit: it must not invoke node_remove, only mention it as a follow-up.
     assert "do not call it" in out.lower() or "do not change anything" in out.lower()
+    # Points at the wait tools as the follow-up for mid-convergence findings, without becoming a
+    # blocking call itself — the audit stays read-only/instantaneous.
+    assert "node_wait" in out
+    assert "service_wait" in out
+    assert "this audit itself stays read-only" in out.lower()
 
 
 def test_find_latest_image_tag_uses_registry_tools():
@@ -363,6 +377,7 @@ def test_deploy_swarm_stack_validates_swarm_then_deploys_and_verifies():
     # Validate the compose file before mutating, then verify convergence after.
     assert out.index("compose_config") < out.index("stack_deploy")
     assert out.index("stack_deploy") < out.index("stack_services")
+    assert out.index("stack_services") < out.index("service_wait")
     assert "stack_ps" in out
     # Mentions teardown but does not invoke it.
     assert "stack_remove" in out

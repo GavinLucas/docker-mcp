@@ -589,6 +589,97 @@ def test_container_wait_healthy_rejects_nonpositive_poll_interval():
         container_wait("web", until="healthy", poll_interval=0)
 
 
+def _log_container(*log_outputs: bytes) -> MagicMock:
+    """A mock container whose logs() output advances through `log_outputs` on each call."""
+    container = MagicMock()
+    container.logs.side_effect = list(log_outputs)
+    return container
+
+
+def test_container_wait_log_match_finds_existing_line():
+    container = _log_container(b"starting up\nREADY\n")
+    with _patch() as mock_client, patch("docker_mcp.tools.containers.time.sleep") as sleep:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern="READY", timeout_seconds=5)
+    assert result["met"] is True
+    assert result["matched_line"] == "READY"
+    sleep.assert_not_called()
+
+
+def test_container_wait_log_match_polls_until_line_appears():
+    container = _log_container(b"starting up\n", b"starting up\nREADY\n")
+    with _patch() as mock_client, patch("docker_mcp.tools.containers.time.sleep") as sleep:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern="READY", timeout_seconds=5, poll_interval=0.01)
+    assert result["met"] is True
+    assert container.logs.call_count == 2
+    sleep.assert_called_once()
+
+
+def test_container_wait_log_match_is_substring_by_default_not_regex():
+    # A literal-looking-but-regex-special pattern must be treated as a plain substring by default.
+    container = _log_container(b"cost: $5.00 (ok)\n")
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern="$5.00 (ok)", timeout_seconds=5)
+    assert result["met"] is True
+
+
+def test_container_wait_log_match_regex_opt_in():
+    container = _log_container(b"error code: 42\n")
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern=r"error code: \d+", regex=True, timeout_seconds=5)
+    assert result["met"] is True
+    assert result["matched_line"] == "error code: 42"
+
+
+def test_container_wait_log_match_regex_false_treats_special_chars_literally():
+    # Without regex=True, a regex metacharacter in `pattern` must not be interpreted specially.
+    container = _log_container(b"no digits here\n")
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern=r"\d+", timeout_seconds=0.0)
+    assert result["met"] is False  # literal backslash-d-plus isn't in the log
+
+
+def test_container_wait_log_match_times_out():
+    container = _log_container(b"still waiting\n")
+    with _patch() as mock_client:
+        mock_client.return_value.containers.get.return_value = container
+        result = container_wait("web", until="log-match", pattern="READY", timeout_seconds=0.0)
+    assert result["met"] is False
+    assert result["timed_out"] is True
+    assert result["matched_line"] is None
+
+
+def test_container_wait_log_match_returns_promptly_when_container_exits_unmatched():
+    # A container that exits without ever printing the pattern must not poll to the full
+    # timeout — there are no further logs coming, so this should return immediately.
+    container = _log_container(b"still waiting\n")
+    container.attrs = {"State": {"Status": "exited"}}
+    with _patch() as mock_client, patch("docker_mcp.tools.containers.time.sleep") as sleep:
+        mock_client.return_value.containers.get.return_value = container
+        started = time.monotonic()
+        result = container_wait("web", until="log-match", pattern="READY", timeout_seconds=60)
+        elapsed = time.monotonic() - started
+    assert result["met"] is False
+    assert result["timed_out"] is False
+    assert result["status"] == "exited"
+    sleep.assert_not_called()
+    assert elapsed < 2.0, f"should return promptly on exit, not poll toward the 60s timeout ({elapsed:.2f}s)"
+
+
+def test_container_wait_log_match_requires_pattern():
+    with pytest.raises(ValueError, match="pattern"):
+        container_wait("web", until="log-match")
+
+
+def test_container_wait_log_match_rejects_nonpositive_poll_interval():
+    with pytest.raises(ValueError, match="poll_interval"):
+        container_wait("web", until="log-match", pattern="x", poll_interval=0)
+
+
 # ---------- shared resource helpers: log tail + computed stats summary ----------
 
 

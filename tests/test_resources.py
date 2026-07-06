@@ -20,11 +20,19 @@ from docker_mcp.tools.resources import (
     get_docs_section,
     get_host_container_logs_resource,
     get_host_container_stats_resource,
+    get_host_service_logs_resource,
+    get_host_service_tasks_resource,
     get_hosts_resource,
+    get_service_logs_resource,
+    get_service_tasks_resource,
     get_tool_catalog,
     list_container_resources,
     list_docs_sections,
     list_host_container_resources,
+    list_host_node_resources,
+    list_host_service_resources,
+    list_node_resources,
+    list_service_resources,
 )
 
 
@@ -267,3 +275,162 @@ def test_multi_host_registers_empty_authority_and_host_qualified_uris_end_to_end
     assert {"docker-logs:///{id_or_name}", "docker-logs://{host}/{id_or_name}"} <= uris
     assert {"docker-stats:///{id_or_name}", "docker-stats://{host}/{id_or_name}"} <= uris
     assert "docker://containers" not in uris  # bare form replaced by empty-authority in multi-host
+
+
+# ---------- service observability resources (docker://services, service-logs://, service-tasks://) ----------
+
+
+def _service(name, short_id, mode, image, replicas=None):
+    s = MagicMock()
+    s.name = name
+    s.short_id = short_id
+    mode_spec = {"Replicated": {"Replicas": replicas}} if mode == "replicated" else {"Global": {}}
+    s.attrs = {"Spec": {"Mode": mode_spec, "TaskTemplate": {"ContainerSpec": {"Image": image}}}}
+    return s
+
+
+def test_list_service_resources_indexes_replicated_and_global():
+    replicated = _service("web", "abc123", "replicated", "nginx", replicas=3)
+    global_svc = _service("agent", "def456", "global", "fluentd")
+    with patch("docker_mcp.tools.resources._get_client") as mock_client:
+        mock_client.return_value.services.list.return_value = [replicated, global_svc]
+        payload = json.loads(list_service_resources())
+    mock_client.return_value.services.list.assert_called_once_with()
+    by_name = {s["name"]: s for s in payload["services"]}
+    assert by_name["web"]["mode"] == "replicated"
+    assert by_name["web"]["desired_replicas"] == 3
+    assert by_name["web"]["image"] == "nginx"
+    assert by_name["web"]["logs"] == "service-logs://web"
+    assert by_name["web"]["tasks"] == "service-tasks://web"
+    assert by_name["agent"]["mode"] == "global"
+    assert by_name["agent"]["desired_replicas"] is None
+
+
+def test_service_logs_resource_returns_tail():
+    with patch("docker_mcp.tools.resources._read_service_log_tail", return_value="l1\nl2") as mock_read:
+        assert get_service_logs_resource("web") == "l1\nl2"
+    mock_read.assert_called_once_with("web")
+
+
+def test_service_tasks_resource_returns_json_summary():
+    summary = {"service": "web", "running_tasks": 2, "desired_tasks": 2}
+    with patch("docker_mcp.tools.resources._read_service_task_summary", return_value=summary):
+        assert json.loads(get_service_tasks_resource("web")) == summary
+
+
+def test_service_resources_refused_when_services_domain_disabled(monkeypatch):
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"services"}))
+    for call in (
+        list_service_resources,
+        lambda: get_service_logs_resource("web"),
+        lambda: get_service_tasks_resource("web"),
+    ):
+        with pytest.raises(ValueError, match="disabled via DOCKER_MCP_SERVER_DISABLE"):
+            call()
+
+
+def test_service_default_index_emits_empty_authority_children_in_multi_host(monkeypatch):
+    _set_multi(monkeypatch)
+    svc = _service("web", "abc123", "replicated", "nginx", replicas=1)
+    with patch("docker_mcp.tools.resources._get_client") as mock_client:
+        mock_client.return_value.services.list.return_value = [svc]
+        web = json.loads(list_service_resources())["services"][0]
+    assert web["logs"] == "service-logs:///web"
+    assert web["tasks"] == "service-tasks:///web"
+
+
+def test_service_host_index_emits_host_qualified_children_and_routes(monkeypatch):
+    _set_multi(monkeypatch)
+    svc = _service("web", "abc123", "replicated", "nginx", replicas=1)
+    with patch("docker_mcp.tools.resources._get_client") as mock_client:
+        mock_client.return_value.services.list.return_value = [svc]
+        web = json.loads(list_host_service_resources("prod"))["services"][0]
+    assert web["logs"] == "service-logs://prod/web"
+    assert web["tasks"] == "service-tasks://prod/web"
+    mock_client.assert_called_once_with("prod")
+
+
+def test_host_service_logs_resource_routes_to_host():
+    with patch("docker_mcp.tools.resources._read_service_log_tail", return_value="L1") as mock_read:
+        assert get_host_service_logs_resource("prod", "web") == "L1"
+    mock_read.assert_called_once_with("web", host="prod")
+
+
+def test_host_service_tasks_resource_routes_to_host():
+    with patch("docker_mcp.tools.resources._read_service_task_summary", return_value={"service": "web"}) as mock_read:
+        assert json.loads(get_host_service_tasks_resource("prod", "web")) == {"service": "web"}
+    mock_read.assert_called_once_with("web", host="prod")
+
+
+def test_single_host_registers_bare_service_uris_end_to_end():
+    uris = _registered_resource_uris(None)
+    assert "docker://services" in uris
+    assert "service-logs://{id_or_name}" in uris
+    assert "service-tasks://{id_or_name}" in uris
+
+
+def test_multi_host_registers_service_uris_end_to_end():
+    uris = _registered_resource_uris("local=ssh://a, prod=ssh://b")
+    assert {"docker:///services", "docker://{host}/services"} <= uris
+    assert {"service-logs:///{id_or_name}", "service-logs://{host}/{id_or_name}"} <= uris
+    assert {"service-tasks:///{id_or_name}", "service-tasks://{host}/{id_or_name}"} <= uris
+    assert "docker://services" not in uris
+
+
+# ---------- node observability resource (docker://nodes — index only) ----------
+
+
+def _node(short_id, hostname, state, availability, role, reachability=None):
+    n = MagicMock()
+    n.short_id = short_id
+    attrs = {
+        "Description": {"Hostname": hostname},
+        "Status": {"State": state},
+        "Spec": {"Availability": availability, "Role": role},
+    }
+    if reachability is not None:
+        attrs["ManagerStatus"] = {"Reachability": reachability}
+    n.attrs = attrs
+    return n
+
+
+def test_list_node_resources_indexes_state_availability_role():
+    manager = _node("n1", "host-a", "ready", "active", "manager", reachability="reachable")
+    worker = _node("n2", "host-b", "down", "drain", "worker")
+    with patch("docker_mcp.tools.resources._get_client") as mock_client:
+        mock_client.return_value.nodes.list.return_value = [manager, worker]
+        payload = json.loads(list_node_resources())
+    mock_client.return_value.nodes.list.assert_called_once_with()
+    by_host = {n["hostname"]: n for n in payload["nodes"]}
+    assert by_host["host-a"]["state"] == "ready"
+    assert by_host["host-a"]["role"] == "manager"
+    assert by_host["host-a"]["manager_reachability"] == "reachable"
+    assert by_host["host-b"]["state"] == "down"
+    assert by_host["host-b"]["availability"] == "drain"
+    assert by_host["host-b"]["manager_reachability"] is None
+
+
+def test_node_resources_refused_when_nodes_domain_disabled(monkeypatch):
+    monkeypatch.setattr("docker_mcp.server.DISABLED_DOMAINS", frozenset({"nodes"}))
+    with pytest.raises(ValueError, match="disabled via DOCKER_MCP_SERVER_DISABLE"):
+        list_node_resources()
+
+
+def test_node_host_index_routes_to_host(monkeypatch):
+    _set_multi(monkeypatch)
+    node = _node("n1", "host-a", "ready", "active", "manager")
+    with patch("docker_mcp.tools.resources._get_client") as mock_client:
+        mock_client.return_value.nodes.list.return_value = [node]
+        list_host_node_resources("prod")
+    mock_client.assert_called_once_with("prod")
+
+
+def test_single_host_registers_bare_node_uri_end_to_end():
+    uris = _registered_resource_uris(None)
+    assert "docker://nodes" in uris
+
+
+def test_multi_host_registers_node_uris_end_to_end():
+    uris = _registered_resource_uris("local=ssh://a, prod=ssh://b")
+    assert {"docker:///nodes", "docker://{host}/nodes"} <= uris
+    assert "docker://nodes" not in uris

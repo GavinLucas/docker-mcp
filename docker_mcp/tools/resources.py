@@ -17,6 +17,32 @@ DOCKER_DOCS_BASE_URL = "https://docker-py.readthedocs.io/en/stable"
 _DOCS_TIMEOUT = 30.0
 _USER_AGENT = f"docker-mcp-server/{package_version()}"
 
+# Cap on the (decoded) bytes we'll buffer from a single docs fetch. These are fixed, known-good
+# doc URLs (not agent-pointed like registry.py's targets), but a compromised/redesigned upstream
+# page could still serve something huge, and docs_lookup makes this path directly tool-callable —
+# bound it the same way registry.py bounds registry responses (mirrors `_read_capped_response`).
+_MAX_DOCS_RESPONSE_BYTES = 16 * 1024 * 1024  # 16 MiB
+
+
+def _read_capped_docs_response(url: str) -> bytes:
+    """Stream a docs page bounded by `_MAX_DOCS_RESPONSE_BYTES`, raising if it's exceeded."""
+    with httpx.stream(
+        "GET", url, timeout=_DOCS_TIMEOUT, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+    ) as resp:
+        resp.raise_for_status()
+        chunks: list[bytes] = []
+        total = 0
+        for chunk in resp.iter_bytes():
+            total += len(chunk)
+            if total > _MAX_DOCS_RESPONSE_BYTES:
+                raise RuntimeError(
+                    f"Docs response from {url} exceeded the {_MAX_DOCS_RESPONSE_BYTES}-byte limit; "
+                    f"refusing to buffer a response this large."
+                )
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+
 # Sections served from the docker-py SDK documentation. Each maps to
 # DOCKER_DOCS_BASE_URL/<section>.html for backwards compatibility.
 SDK_SECTIONS: tuple[str, ...] = (
@@ -516,9 +542,7 @@ def get_docs_section(section: str) -> str:
             f"DOCKER_MCP_SERVER_DISABLE. Read docker-docs://contents for the sections this server exposes."
         )
     url = _section_url(section)
-    resp = httpx.get(url, timeout=_DOCS_TIMEOUT, follow_redirects=True, headers={"User-Agent": _USER_AGENT})
-    resp.raise_for_status()
-    return resp.content.decode("utf-8", errors="replace")
+    return _read_capped_docs_response(url).decode("utf-8", errors="replace")
 
 
 @tool()

@@ -9,6 +9,64 @@ from docker_mcp.tools._utils import MAX_PAYLOAD_BYTES, drop_none, join_bounded
 from docker_mcp.tools.system import _get_client
 
 
+# --- shared read helpers, also used by the service-logs:// / service-tasks:// resources in
+# resources.py, and by service_wait's "running" mode ---
+
+_FAILING_TASK_STATES = frozenset({"failed", "rejected"})
+
+
+def _read_service_log_tail(id_or_name: str, tail: int = 200, host: str | None = None) -> str:
+    """Return a bounded, non-streaming tail of a swarm service's combined stdout/stderr logs."""
+    service = _get_client(host).services.get(id_or_name)
+    output = service.logs(stdout=True, stderr=True, follow=False, tail=tail)
+
+    def _as_bytes(chunks: Iterable) -> Iterable[bytes]:
+        for chunk in chunks:
+            yield chunk if isinstance(chunk, bytes) else str(chunk).encode("utf-8", errors="replace")
+
+    raw = join_bounded(_as_bytes(cast(Iterable, output)), MAX_PAYLOAD_BYTES, f"logs of service {id_or_name}")
+    return raw.decode("utf-8", errors="replace")
+
+
+def _read_service_task_summary(id_or_name: str, host: str | None = None) -> dict:
+    """
+    Return a computed task/rollout status summary for a swarm service.
+
+    Reproduces what the `audit_swarm_health` prompt already does by hand: counts tasks whose
+    *desired* state is "running" by their actual `Status.State`, compares the count against the
+    service's desired replica count (Replicated mode) or the total returned tasks (Global mode —
+    one task per eligible node, no fixed target), and surfaces any failing tasks' id/node/error.
+    Also includes `UpdateStatus.State` from the same service read, so this one summary doubles as
+    a rollout-progress view.
+    """
+    service = _get_client(host).services.get(id_or_name)
+    attrs = service.attrs
+    mode = (attrs.get("Spec", {}) or {}).get("Mode", {}) or {}
+    tasks = service.tasks(filters={"desired-state": "running"})
+    running = sum(1 for t in tasks if (t.get("Status") or {}).get("State") == "running")
+    desired = mode["Replicated"].get("Replicas") if "Replicated" in mode else len(tasks)
+    failed_tasks = [
+        {
+            "id": t.get("ID"),
+            "node_id": t.get("NodeID"),
+            "state": (t.get("Status") or {}).get("State"),
+            "err": (t.get("Status") or {}).get("Err"),
+            "message": (t.get("Status") or {}).get("Message"),
+        }
+        for t in tasks
+        if (t.get("Status") or {}).get("State") in _FAILING_TASK_STATES or (t.get("Status") or {}).get("Err")
+    ]
+    update_status = attrs.get("UpdateStatus") or {}
+    return {
+        "service": service.name,
+        "mode": "replicated" if "Replicated" in mode else ("global" if "Global" in mode else None),
+        "running_tasks": running,
+        "desired_tasks": desired,
+        "failed_tasks": failed_tasks,
+        "update_state": update_status.get("State"),
+    }
+
+
 @tool()
 def service_create(
     image: str, command: str | list | None = None, extra_kwargs: dict | None = None, host: str | None = None

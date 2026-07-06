@@ -3,6 +3,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from docker_mcp.tools.services import (
+    _read_service_log_tail,
+    _read_service_task_summary,
     service_create,
     service_inspect,
     service_list,
@@ -183,3 +185,73 @@ def test_rollback_service_without_previous_spec_raises():
         with pytest.raises(ValueError, match="no PreviousSpec"):
             service_rollback("svc1")
     api.update_service.assert_not_called()
+
+
+def test_read_service_log_tail_decodes_chunks():
+    service = MagicMock()
+    service.logs.return_value = iter([b"line1\n", b"line2\n"])
+    with _patch() as mock_client:
+        mock_client.return_value.services.get.return_value = service
+        assert _read_service_log_tail("svc1") == "line1\nline2\n"
+    assert service.logs.call_args.kwargs["follow"] is False
+    assert service.logs.call_args.kwargs["tail"] == 200
+
+
+def test_read_service_task_summary_replicated_converged():
+    service = MagicMock()
+    service.name = "web"
+    service.attrs = {"Spec": {"Mode": {"Replicated": {"Replicas": 2}}}}
+    service.tasks.return_value = [
+        {"ID": "t1", "Status": {"State": "running"}},
+        {"ID": "t2", "Status": {"State": "running"}},
+    ]
+    with _patch() as mock_client:
+        mock_client.return_value.services.get.return_value = service
+        summary = _read_service_task_summary("svc1")
+    assert summary == {
+        "service": "web",
+        "mode": "replicated",
+        "running_tasks": 2,
+        "desired_tasks": 2,
+        "failed_tasks": [],
+        "update_state": None,
+    }
+    service.tasks.assert_called_once_with(filters={"desired-state": "running"})
+
+
+def test_read_service_task_summary_surfaces_failing_tasks():
+    service = MagicMock()
+    service.name = "web"
+    service.attrs = {
+        "Spec": {"Mode": {"Replicated": {"Replicas": 2}}},
+        "UpdateStatus": {"State": "updating"},
+    }
+    service.tasks.return_value = [
+        {"ID": "t1", "Status": {"State": "running"}},
+        {"ID": "t2", "NodeID": "n1", "Status": {"State": "rejected", "Err": "no suitable node"}},
+    ]
+    with _patch() as mock_client:
+        mock_client.return_value.services.get.return_value = service
+        summary = _read_service_task_summary("svc1")
+    assert summary["running_tasks"] == 1
+    assert summary["desired_tasks"] == 2
+    assert summary["update_state"] == "updating"
+    assert summary["failed_tasks"] == [
+        {"id": "t2", "node_id": "n1", "state": "rejected", "err": "no suitable node", "message": None}
+    ]
+
+
+def test_read_service_task_summary_global_mode_desired_is_task_count():
+    service = MagicMock()
+    service.name = "worker"
+    service.attrs = {"Spec": {"Mode": {"Global": {}}}}
+    service.tasks.return_value = [
+        {"ID": "t1", "Status": {"State": "running"}},
+        {"ID": "t2", "Status": {"State": "starting"}},
+    ]
+    with _patch() as mock_client:
+        mock_client.return_value.services.get.return_value = service
+        summary = _read_service_task_summary("svc1")
+    assert summary["mode"] == "global"
+    assert summary["running_tasks"] == 1
+    assert summary["desired_tasks"] == 2  # no fixed target: len(returned tasks)

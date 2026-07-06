@@ -27,6 +27,7 @@ DOCKERHUB.md
 # Agent / project docs not needed inside the bundle.
 CLAUDE.md
 SECURITY.md
+CONTRIBUTING.md
 
 # Caches and VCS.
 __pycache__/

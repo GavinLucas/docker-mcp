@@ -571,3 +571,51 @@ def test_build_client_platform_default_ignores_ambient_docker_host(monkeypatch):
         assert system_module._build_client(Host("local", None)) is sentinel
     ctor.assert_called_once_with()  # no base_url -> platform socket/npipe; ambient DOCKER_HOST ignored
     from_env.assert_not_called()
+
+
+# ---------- _ensure_ssh_port: work around docker-py hardcoding port 22 for a bare ssh:// URL ----------
+
+
+def test_ensure_ssh_port_ignores_non_ssh_url():
+    assert system_module._ensure_ssh_port("tcp://prod:2376") == "tcp://prod:2376"
+
+
+def test_ensure_ssh_port_leaves_explicit_port_alone(monkeypatch):
+    # An explicit port must win even if ~/.ssh/config also has one — no lookup should even be needed.
+    monkeypatch.setattr(system_module, "parse_ssh_url", MagicMock(side_effect=AssertionError("should not be called")))
+    assert system_module._ensure_ssh_port("ssh://bob@example.com:1234") == "ssh://bob@example.com:1234"
+
+
+def test_ensure_ssh_port_splices_in_ssh_config_port(tmp_path, monkeypatch):
+    config = tmp_path / "config"
+    config.write_text("Host example.com\n    Port 1234\n")
+    monkeypatch.setattr("os.path.expanduser", lambda p: str(config) if p == "~/.ssh/config" else p)
+    assert system_module._ensure_ssh_port("ssh://bob@example.com") == "ssh://bob@example.com:1234"
+
+
+def test_ensure_ssh_port_unchanged_when_config_has_no_port(monkeypatch):
+    monkeypatch.setattr("os.path.exists", lambda _path: False)  # no ~/.ssh/config at all
+    assert system_module._ensure_ssh_port("ssh://bob@example.com") == "ssh://bob@example.com"
+
+
+def test_build_default_client_splices_ssh_config_port_into_docker_host(tmp_path, monkeypatch):
+    config = tmp_path / "config"
+    config.write_text("Host example.com\n    Port 1234\n")
+    monkeypatch.setattr("os.path.expanduser", lambda p: str(config) if p == "~/.ssh/config" else p)
+    monkeypatch.setenv("DOCKER_HOST", "ssh://bob@example.com")
+    sentinel = MagicMock()
+    with patch("docker_mcp.tools.system.docker.from_env", return_value=sentinel) as from_env:
+        assert system_module._build_default_client() is sentinel
+    assert from_env.call_args.kwargs["environment"]["DOCKER_HOST"] == "ssh://bob@example.com:1234"
+
+
+def test_build_client_splices_ssh_config_port_for_multi_host_ssh_entry(tmp_path, monkeypatch):
+    _set_multi(monkeypatch)
+    config = tmp_path / "config"
+    config.write_text("Host example.com\n    Port 1234\n")
+    monkeypatch.setattr("os.path.expanduser", lambda p: str(config) if p == "~/.ssh/config" else p)
+    host = Host("remote", "ssh://bob@example.com")
+    sentinel = MagicMock()
+    with patch("docker_mcp.tools.system.docker.DockerClient", return_value=sentinel) as ctor:
+        assert system_module._build_client(host) is sentinel
+    ctor.assert_called_once_with(base_url="ssh://bob@example.com:1234")

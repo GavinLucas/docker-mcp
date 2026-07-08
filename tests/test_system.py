@@ -593,6 +593,14 @@ def test_ensure_ssh_port_leaves_malformed_port_for_docker_py_to_reject(monkeypat
     assert system_module._ensure_ssh_port("ssh://bob@example.com:abc") == "ssh://bob@example.com:abc"
 
 
+def test_ensure_ssh_port_leaves_hostless_url_for_docker_py_to_reject(monkeypatch):
+    # No hostname (e.g. "ssh://" or "ssh://@") would make parse_ssh_url raise ValueError — must not
+    # propagate out of this helper; leave docker-py's own validation to reject the malformed url.
+    monkeypatch.setattr(system_module, "parse_ssh_url", MagicMock(side_effect=AssertionError("should not be called")))
+    assert system_module._ensure_ssh_port("ssh://") == "ssh://"
+    assert system_module._ensure_ssh_port("ssh://@") == "ssh://@"
+
+
 def test_ensure_ssh_port_splices_in_ssh_config_port(tmp_path, monkeypatch):
     config = tmp_path / "config"
     config.write_text("Host example.com\n    Port 1234\n")

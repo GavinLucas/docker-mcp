@@ -11,10 +11,14 @@ from docker_mcp.tools.system import _get_client
 @tool()
 def node_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a swarm node by id or name.
+    Get a swarm node's full inspect payload by id or name.
 
-    args: id_or_name - The node id or name
-    returns: dict - The node's attrs
+    Must run against a swarm manager. Shows role, availability, status, and manager reachability —
+    use `node_list` to enumerate nodes first, or the `docker://nodes` resource for a fleet
+    summary; `service_ps(filters={"node": ...})` shows what a service runs on one node.
+
+    args: id_or_name - The node id or hostname (as shown by `node_list`)
+    returns: dict - The node's attrs (Spec{Role, Availability}, Status, ManagerStatus for managers)
     """
     return _get_client(host).nodes.get(id_or_name).attrs
 

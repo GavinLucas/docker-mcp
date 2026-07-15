@@ -11,14 +11,20 @@ def secret_create(
     name: str, data: bytes, labels: dict | None = None, driver: dict | None = None, host: str | None = None
 ) -> dict:
     """
-    Create a swarm secret.
+    Create a swarm secret; requires a swarm manager.
+
+    Write-once: the payload can never be read back through the API (`secret_inspect` returns
+    metadata only) and cannot be changed later — to rotate, create a new secret and update the
+    consuming services, keeping your own copy of the value. For non-sensitive data that should
+    stay readable, use `config_create` instead. Created secrets are stamped with provenance
+    labels.
 
     args:
-        name - The name of the secret
-        data - The secret payload
+        name - Name for the secret (unique within the swarm)
+        data - The secret payload (max 500 KB; must be empty when driver is set)
         labels - Labels to set on the secret
-        driver - Optional secret driver configuration
-    returns: dict - The created secret's attrs
+        driver - Optional secret-driver config for values held in an external store
+    returns: dict - The created secret's attrs (ID and Spec metadata; never the payload)
     """
     kwargs: dict = {
         "name": name,

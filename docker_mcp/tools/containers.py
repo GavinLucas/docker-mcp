@@ -245,12 +245,18 @@ def container_start(id_or_name: str, host: str | None = None) -> dict:
 @tool()
 def container_stop(id_or_name: str, stop_timeout_seconds: int = 10, host: str | None = None) -> dict:
     """
-    Stop a container.
+    Gracefully stop a running container (its configured stop signal, then SIGKILL after a timeout).
+
+    Prefer this over `container_kill` for a clean shutdown: the main process receives the
+    container's stop signal (`STOPSIGNAL`, default SIGTERM) and has stop_timeout_seconds to exit
+    before the daemon force-kills it. Use `container_restart` to stop and start again in one call,
+    or `container_pause` to freeze processes without stopping. When the server runs containerized
+    it refuses to stop its own container.
 
     args:
         id_or_name - The container id or name
-        stop_timeout_seconds - Seconds to wait for graceful stop before SIGKILL
-    returns: dict - The container's attrs after stop
+        stop_timeout_seconds - Seconds between the stop signal and SIGKILL (default 10)
+    returns: dict - The container's attrs after the stop (exit code under State.ExitCode)
     """
     container = _get_client(host).containers.get(id_or_name)
     guard_not_self(container, host=host)
@@ -279,12 +285,18 @@ def container_restart(id_or_name: str, stop_timeout_seconds: int = 10, host: str
 @tool()
 def container_kill(id_or_name: str, signal: str | None = None, host: str | None = None) -> dict:
     """
-    Send a signal to a container.
+    Send a signal to a running container (default SIGKILL — immediate, no graceful shutdown).
+
+    Use it to force-kill a container that ignores `container_stop`, or with `signal` to poke a
+    process without stopping it (e.g. SIGHUP for a config reload). For a normal shutdown prefer
+    `container_stop`, which sends the container's configured stop signal first. Fails with a
+    conflict error if the container is not running. When the server runs containerized it refuses
+    to signal its own container.
 
     args:
         id_or_name - The container id or name
-        signal - Signal to send (defaults to SIGKILL)
-    returns: dict - The container's attrs after kill
+        signal - Signal name or number as a string (e.g. "SIGHUP", "9"); default SIGKILL
+    returns: dict - The container's attrs after the signal
     """
     container = _get_client(host).containers.get(id_or_name)
     guard_not_self(container, host=host)
@@ -316,10 +328,13 @@ def container_pause(id_or_name: str, host: str | None = None) -> dict:
 @tool()
 def container_unpause(id_or_name: str, host: str | None = None) -> dict:
     """
-    Resume all processes in a paused container.
+    Resume all processes in a paused container (the reverse of `container_pause`).
+
+    Only valid on a paused container — it fails if the container is merely stopped; use
+    `container_start` for stopped containers. Processes continue from where they were frozen.
 
     args: id_or_name - The container id or name
-    returns: dict - The container's attrs after unpause
+    returns: dict - The container's attrs after unpause (State.Paused becomes false)
     """
     container = _get_client(host).containers.get(id_or_name)
     container.unpause()
@@ -429,10 +444,15 @@ def container_logs(
 @tool()
 def container_stats(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a single resource usage stats snapshot for a container.
+    Get one point-in-time resource-usage snapshot for a container (non-streaming).
+
+    Returns the raw engine stats payload; CPU percent must be computed from the delta between
+    `cpu_stats` and `precpu_stats`. For a pre-computed human-readable summary prefer the
+    `docker-stats://{id_or_name}` resource; for a process listing use `container_top`.
 
     args: id_or_name - The container id or name
-    returns: dict - Decoded stats snapshot
+    returns: dict - Engine stats payload (read, cpu_stats, precpu_stats, memory_stats, networks,
+        pids_stats, ...)
     """
     container = _get_client(host).containers.get(id_or_name)
     # `decode` is only valid with stream=True; a one-shot stream=False read already returns a dict.
@@ -530,12 +550,16 @@ def _read_stats_summary(id_or_name: str, host: str | None = None) -> dict:
 @tool()
 def container_top(id_or_name: str, ps_args: str | None = None, host: str | None = None) -> dict:
     """
-    Show the running processes inside a container.
+    List the processes running inside a container (the daemon runs `ps` on the host).
+
+    Works on any running container without executing anything in it, so it needs no shell or `ps`
+    binary in the image — unlike `container_exec` with `ps`. Use `container_stats` for resource
+    usage rather than process lists. Fails if the container is not running.
 
     args:
         id_or_name - The container id or name
-        ps_args - Arguments to pass to ps inside the container
-    returns: dict - Output of the top command
+        ps_args - Extra ps arguments (e.g. "aux"); default is the daemon's standard ps invocation
+    returns: dict - {"Titles": [ps column names], "Processes": [[one row of values per process]]}
     """
     container = _get_client(host).containers.get(id_or_name)
     return cast(dict, container.top(ps_args=ps_args))
@@ -649,10 +673,14 @@ def container_commit(
 @tool()
 def container_diff(id_or_name: str, host: str | None = None) -> list:
     """
-    Inspect changes on a container's filesystem.
+    List filesystem changes a container has made relative to its image.
+
+    Use it to audit what a container wrote before `container_commit` or `container_archive_get`,
+    or to debug unexpected writes. Only the writable container layer is compared — files in
+    volumes and bind mounts never show up.
 
     args: id_or_name - The container id or name
-    returns: list - Filesystem changes since the image was created
+    returns: list - Dicts of {"Path", "Kind"}; Kind 0=modified, 1=added, 2=deleted
     """
     container = _get_client(host).containers.get(id_or_name)
     return container.diff()
@@ -661,12 +689,16 @@ def container_diff(id_or_name: str, host: str | None = None) -> list:
 @tool()
 def container_rename(id_or_name: str, name: str, host: str | None = None) -> dict:
     """
-    Rename a container.
+    Rename a container in place; its id, state, and configuration are unchanged.
+
+    Use it to free up or claim a container name (names are unique per daemon) — e.g. before
+    starting a replacement under the old name. Fails with a conflict error if the new name is
+    already taken. Not related to `image_tag`, which names images.
 
     args:
         id_or_name - The container id or name
-        name - The new name
-    returns: dict - The container's attrs after rename
+        name - The new name; must not be in use by any other container
+    returns: dict - The container's attrs after the rename
     """
     container = _get_client(host).containers.get(id_or_name)
     container.rename(name)

@@ -174,12 +174,18 @@ def service_remove(id_or_name: str, host: str | None = None) -> bool:
 @tool()
 def service_ps(id_or_name: str, filters: dict | None = None, host: str | None = None) -> list:
     """
-    List the tasks of a swarm service.
+    List a swarm service's tasks (per-replica scheduling units), like `docker service ps`.
+
+    Shows where replicas run and why they fail: each task carries `Status`
+    (State/Message/ContainerStatus), `DesiredState`, `NodeID`, and `Slot`. Prefer this over
+    `container_list` for services (tasks may run on other nodes), `stack_ps` for a whole stack,
+    and the `service-tasks://{id_or_name}` resource for a computed rollout summary. Requires a
+    swarm manager.
 
     args:
         id_or_name - The service id or name
-        filters - Filter by id, name, node, label, desired-state
-    returns: list - A list of task dicts
+        filters - Filter dict; keys: id, name, node, label, desired-state (running|shutdown|accepted)
+    returns: list - Task dicts (ID, Slot, NodeID, Status, DesiredState, Spec)
     """
     service = _get_client(host).services.get(id_or_name)
     return service.tasks(filters=filters)

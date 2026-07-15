@@ -42,10 +42,14 @@ def volume_create(
 @tool()
 def volume_inspect(name: str, host: str | None = None) -> dict:
     """
-    Get a volume by name.
+    Get a volume's full inspect payload by name.
 
-    args: name - The volume name
-    returns: dict - The volume's attrs
+    Use it after `volume_list` to see a volume's on-disk location, driver, and labels — e.g.
+    before a backup or `volume_remove`. Volumes are addressed purely by name; they have no
+    separate id.
+
+    args: name - The volume name (volumes have no ids)
+    returns: dict - The volume's attrs (Name, Driver, Mountpoint, CreatedAt, Labels, Options, Scope)
     """
     return _get_client(host).volumes.get(name).attrs
 

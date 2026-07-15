@@ -310,6 +310,21 @@ legacy docstrings are cleaned opportunistically, not churned):
    SDK Policy below — an unverified claim about identifier semantics (e.g. "name or id" for a
    resource actually addressed by name only) is exactly the kind of thing PR review catches late.
 
+**Division of labor across the three discovery layers.** For a lazy-loading client (e.g. Claude
+Code), tool schemas load on demand; what is always in context is only (1) the **tool names** and
+(2) the **`instructions` router**. Docstrings are layer (3): a deferred tool cannot be invoked
+without fetching its definition, so the docstring is guaranteed to be read at the moment of
+choice — typically side by side with the sibling definitions the same search returned, which is
+where the item-2 discriminators do their work. Consequences: pre-fetch discoverability belongs to
+the naming convention and the router, not the docstring (don't pad docstrings with search
+keywords); a *cross-domain* selection caveat that must be visible before any schema is fetched
+(e.g. "prefer `dest_path` for large output") goes in the router's caveat list (`_DOMAIN_BLURBS` /
+`build_instructions()` — see "Server singleton" above), while *sibling-level* discriminators stay
+in docstrings and are never duplicated into the router; and sibling references must use the exact
+tool name (`container_kill`, never "the kill tool") — lazy clients keyword-search descriptions, so
+exact names double as retrieval anchors that surface the right alternative even when the agent
+searched for the wrong one.
+
 Self-check before opening the PR: read the docstring as an agent holding 150+ tool names and
 nothing else — could you pick this tool over its neighbors and call it correctly on the first try?
 **Write it this way the first time a tool is added or its behavior changes** — don't wait for a

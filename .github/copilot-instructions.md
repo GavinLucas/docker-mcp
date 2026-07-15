@@ -211,6 +211,19 @@ touches — do not demand rewrites of untouched legacy docstrings.
    id" for a resource actually addressed by name only), default values, and signal/timeout
    behavior.
 
+**Division of labor across the three discovery layers.** For a lazy-loading client (e.g. Claude
+Code), tool schemas load on demand; always in context are only (1) the **tool names** and (2) the
+**`instructions` router** (`_DOMAIN_BLURBS` / `build_instructions()` in `server.py`). Docstrings
+are layer (3): a deferred tool cannot be invoked without fetching its definition, so it is read at
+the moment of choice, side by side with sibling definitions — where the item-2 discriminators do
+their work. When reviewing, apply the boundary: a *cross-domain* selection caveat that must be
+visible before any schema is fetched (e.g. "prefer `dest_path` for large output") belongs in the
+router's caveat list, not buried in one docstring; *sibling-level* discriminators belong in
+docstrings and should not be duplicated into the router; flag docstrings padded with search
+keywords (discoverability is the naming convention's and the router's job); and flag sibling
+references that don't use the exact tool name (`container_kill`, never "the kill tool") — lazy
+clients keyword-search descriptions, so exact names double as retrieval anchors.
+
 ### Bounding rules
 
 - Tools that buffer a daemon-side byte stream in memory must cap it with `join_bounded(stream, max_bytes, what)`; the in-band default is `MAX_PAYLOAD_BYTES` (32 MiB). Large payloads belong in the file-path modes (`dest_path` / `from_file` params, or `container_archive_get_to_file`), which stream via `stream_to_file` / an open file handle.

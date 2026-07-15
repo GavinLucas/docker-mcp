@@ -106,7 +106,7 @@ pin a version, replace `:latest` with a release tag (e.g. `:1.5.1`). To pull fro
 `ghcr.io/l337-org/docker-mcp-server:latest`.
 
 > **Image renamed.** As of 1.5.0 the image is published to `ghcr.io/l337-org/docker-mcp-server`
-> (matching the PyPI name). The old `ghcr.io/l337-org/docker-mcp` image is frozen at 1.4.0 and no
+> (matching the PyPI name). The old `ghcr.io/gavinlucas/docker-mcp` image is frozen at 1.4.0 and no
 > longer updated — point new pulls at `…/docker-mcp-server`.
 
 **Image variants.** Two variants are published to both registries (`gavinlucas/docker-mcp-server` on

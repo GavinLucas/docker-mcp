@@ -757,9 +757,9 @@ def compose_pause(
     Pause the containers of a compose project (freezes their processes in place).
 
     Paused containers stop consuming CPU but keep memory, network endpoints, and state; resume
-    with `compose_unpause`. To actually stop containers (SIGTERM, free resources) use
-    `compose_stop`; to stop and delete them use `compose_down`. Does not raise on a non-zero CLI
-    exit — inspect `returncode`/`stderr` in the result.
+    with `compose_unpause`. To actually stop containers (each one's configured stop signal, freeing
+    resources) use `compose_stop`; to stop and delete them use `compose_down`. Does not raise on a
+    non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         services - Restrict to these services (default: all)

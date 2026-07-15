@@ -245,16 +245,17 @@ def container_start(id_or_name: str, host: str | None = None) -> dict:
 @tool()
 def container_stop(id_or_name: str, stop_timeout_seconds: int = 10, host: str | None = None) -> dict:
     """
-    Gracefully stop a running container (SIGTERM, then SIGKILL after a timeout).
+    Gracefully stop a running container (its configured stop signal, then SIGKILL after a timeout).
 
-    Prefer this over `container_kill` for a clean shutdown: the main process gets SIGTERM and has
-    stop_timeout_seconds to exit before the daemon force-kills it. Use `container_restart` to stop
-    and start again in one call, or `container_pause` to freeze processes without stopping. When
-    the server runs containerized it refuses to stop its own container.
+    Prefer this over `container_kill` for a clean shutdown: the main process receives the
+    container's stop signal (`STOPSIGNAL`, default SIGTERM) and has stop_timeout_seconds to exit
+    before the daemon force-kills it. Use `container_restart` to stop and start again in one call,
+    or `container_pause` to freeze processes without stopping. When the server runs containerized
+    it refuses to stop its own container.
 
     args:
         id_or_name - The container id or name
-        stop_timeout_seconds - Seconds between SIGTERM and SIGKILL (default 10)
+        stop_timeout_seconds - Seconds between the stop signal and SIGKILL (default 10)
     returns: dict - The container's attrs after the stop (exit code under State.ExitCode)
     """
     container = _get_client(host).containers.get(id_or_name)
@@ -288,8 +289,9 @@ def container_kill(id_or_name: str, signal: str | None = None, host: str | None 
 
     Use it to force-kill a container that ignores `container_stop`, or with `signal` to poke a
     process without stopping it (e.g. SIGHUP for a config reload). For a normal shutdown prefer
-    `container_stop`, which sends SIGTERM first. Fails with a conflict error if the container is
-    not running. When the server runs containerized it refuses to signal its own container.
+    `container_stop`, which sends the container's configured stop signal first. Fails with a
+    conflict error if the container is not running. When the server runs containerized it refuses
+    to signal its own container.
 
     args:
         id_or_name - The container id or name

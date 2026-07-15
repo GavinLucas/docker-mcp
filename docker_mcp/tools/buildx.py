@@ -482,8 +482,8 @@ def buildx_create(
     Needed when the default `docker` driver falls short: multi-platform builds and cache export
     require a `docker-container` (or `kubernetes`/`remote`) builder. Pass `use=True` to make it
     the default for later `buildx_build` calls (else switch with `buildx_use`); `bootstrap=True`
-    starts the builder now rather than on first build. Never raises on failure — inspect
-    `returncode`/`stderr`.
+    starts the builder now rather than on first build. Does not raise on a non-zero CLI exit —
+    inspect `returncode`/`stderr` in the result.
 
     args:
         name - Name for the new builder (defaults to a generated name)

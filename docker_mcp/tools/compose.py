@@ -758,8 +758,8 @@ def compose_pause(
 
     Paused containers stop consuming CPU but keep memory, network endpoints, and state; resume
     with `compose_unpause`. To actually stop containers (SIGTERM, free resources) use
-    `compose_stop`; to stop and delete them use `compose_down`. Never raises on failure — inspect
-    `returncode`/`stderr` in the result.
+    `compose_stop`; to stop and delete them use `compose_down`. Does not raise on a non-zero CLI
+    exit — inspect `returncode`/`stderr` in the result.
 
     args:
         services - Restrict to these services (default: all)

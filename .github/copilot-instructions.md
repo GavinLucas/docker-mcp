@@ -148,7 +148,10 @@ def mcp_example(name: str):
     """
     Say hello to someone by name.
 
-    args: name - The name to say hello to
+    Use it for a single greeting; use `mcp_example_bulk` to greet many names in one call.
+    Read-only, no side effects.
+
+    args: name - The name to say hello to (any non-empty string)
     returns: str - The greeting
     """
     return f"Hello, {name}!"
@@ -189,8 +192,10 @@ touches — do not demand rewrites of untouched legacy docstrings.
      running/paused);
    - side effects and destructive/irreversible behavior in prose — the scorer explicitly discounts
      `readOnlyHint`/`destructiveHint` annotations as a substitute for description text;
-   - for CLI-backed tools, the error style ("never raises — inspect `returncode`/`stderr`" vs
-     "raises `RuntimeError` on CLI failure").
+   - for CLI-backed tools, the error style ("does not raise on a non-zero CLI exit — inspect
+     `returncode`/`stderr`" vs "raises `RuntimeError` on CLI failure"). Flag an absolute "never
+     raises" claim — a missing binary/plugin or a subprocess timeout still raises even in action
+     tools.
    Scale to the tool: a trivial read-only tool needs one discriminator sentence, not five.
 3. **Every `args:` line adds semantics the schema cannot carry**: format, accepted values/ranges,
    defaults, units, parameter interactions. Flag a line that merely echoes the parameter name

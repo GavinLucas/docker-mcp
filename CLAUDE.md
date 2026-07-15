@@ -256,6 +256,9 @@ def mcp_example(name: str):
     return f"Hello, {name}!"
 ```
 
+(`mcp_example` and `mcp_example_bulk` are illustrative only and exist nowhere in the repo — in a
+real docstring the discriminator must name an actually-registered sibling tool.)
+
 - One-line summary sentence, then a blank line
 - `args:` section lists each parameter as `name - description`. Do **not** repeat the parameter's
   type — the type annotation already lands in the tool's `inputSchema`, which the client sees

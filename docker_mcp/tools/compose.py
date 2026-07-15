@@ -538,6 +538,10 @@ def compose_images(
     """
     List the images used by a compose project's services, parsed from `--format json`.
 
+    Answers "what image and tag does each service container actually run?" — the containers must
+    exist (`compose_up`/`compose_create` first). Use `compose_ps` for container state and
+    `image_list` for daemon-wide images. Raises RuntimeError if the CLI call fails.
+
     args:
         project_dir - Dir with the compose file (default: server cwd)
         files - Explicit compose file paths (repeatable, `-f`)
@@ -750,7 +754,12 @@ def compose_pause(
     host: str | None = None,
 ) -> dict:
     """
-    Pause the containers of a compose project (freezes their processes).
+    Pause the containers of a compose project (freezes their processes in place).
+
+    Paused containers stop consuming CPU but keep memory, network endpoints, and state; resume
+    with `compose_unpause`. To actually stop containers (SIGTERM, free resources) use
+    `compose_stop`; to stop and delete them use `compose_down`. Never raises on failure — inspect
+    `returncode`/`stderr` in the result.
 
     args:
         services - Restrict to these services (default: all)

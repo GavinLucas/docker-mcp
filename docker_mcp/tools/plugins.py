@@ -42,9 +42,14 @@ def plugin_install(remote: str, local_name: str | None = None, host: str | None 
 @tool()
 def plugin_list(host: str | None = None) -> list:
     """
-    List installed plugins.
+    List installed engine plugins with their full attrs.
 
-    returns: list - A list of plugin attrs dicts
+    Covers managed engine plugins (volume/network/logging drivers installed via `plugin_install`)
+    — not docker CLI plugins such as compose, buildx, or scout. Use it to find exact plugin names
+    for `plugin_inspect`/`plugin_enable`/`plugin_disable`/`plugin_remove`; the `Enabled` key shows
+    each plugin's state.
+
+    returns: list - One attrs dict per installed plugin (Id, Name, Enabled, Settings, Config)
     """
     return [p.attrs for p in _get_client(host).plugins.list()]
 
@@ -110,11 +115,15 @@ def plugin_enable(name: str, timeout_seconds: int = 0, host: str | None = None) 
 @tool()
 def plugin_remove(name: str, force: bool = False, host: str | None = None) -> bool:
     """
-    Remove a plugin.
+    Uninstall an engine plugin from the daemon.
+
+    Permanent removal — to deactivate but keep a plugin installed use `plugin_disable` instead. An
+    enabled plugin must be disabled first unless `force=True`. Plugin names come from
+    `plugin_list`.
 
     args:
-        name - The plugin name
-        force - Force removal even if the plugin is enabled
+        name - The plugin name (e.g. "vieux/sshfs:latest")
+        force - Remove even if the plugin is enabled (default False)
     returns: bool - True after removal
     """
     _get_client(host).plugins.get(name).remove(force=force)

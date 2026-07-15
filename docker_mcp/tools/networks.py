@@ -24,19 +24,24 @@ def network_create(
     """
     Create a network.
 
+    The daemon default driver is `bridge` (single-host); use `overlay` for swarm-wide networks.
+    Creating a network attaches nothing — connect containers afterwards with `network_connect` or
+    at start via `container_run(network=...)`. Created networks are stamped with provenance labels
+    (find them later via `network_list(managed_only=True)`).
+
     args:
         name - The name of the network
-        driver - Driver name (e.g. bridge, overlay)
-        options - Driver-specific options
-        ipam - IPAM configuration as a dict
-        check_duplicate - Reject creation if a duplicate name exists
+        driver - Driver name (daemon default `bridge`; `overlay` for swarm scope)
+        options - Driver-specific options dict
+        ipam - IPAM configuration as a dict (engine shape: {"Driver", "Config": [{"Subnet", "Gateway", ...}]})
+        check_duplicate - Reject creation if a duplicate name exists (deprecated: recent daemons always check)
         internal - Restrict external access
         labels - Labels to set on the network
         enable_ipv6 - Enable IPv6 networking
-        attachable - Allow standalone containers to attach (swarm)
-        scope - Network scope (local, global, swarm)
+        attachable - Allow standalone containers to attach (swarm overlay networks)
+        scope - Network scope: "local", "global", or "swarm"
         ingress - Make this an ingress network for swarm routing-mesh
-    returns: dict - The created network's attrs
+    returns: dict - The created network's attrs (Id, Name, Driver, Scope, IPAM)
     """
     kwargs: dict = {
         "internal": internal,
@@ -187,10 +192,14 @@ def network_disconnect(id_or_name: str, container: str, force: bool = False, hos
     """
     Disconnect a container from a network.
 
+    The container keeps running with its other network attachments; only this endpoint is removed
+    (the reverse of `network_connect`). A network with connected containers cannot be deleted, so
+    disconnect them before `network_remove`.
+
     args:
         id_or_name - The network id or name
-        container - The container id or name
-        force - Force disconnect
+        container - The container id or name to disconnect
+        force - Force the disconnect; use to clear a stale endpoint (e.g. from a deleted container)
     returns: bool - True after the container is disconnected
     """
     network = _get_client(host).networks.get(id_or_name)

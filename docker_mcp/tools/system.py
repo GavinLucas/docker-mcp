@@ -261,9 +261,15 @@ def system_info(host: str | None = None) -> dict:
 @tool()
 def system_df(host: str | None = None) -> dict:
     """
-    Return Docker disk usage information.
+    Summarize Docker disk usage: layer storage plus per-object sizes for images, containers, volumes, build cache.
 
-    returns: dict - Data usage information for images, containers and volumes
+    Equivalent to `docker system df`. Use it to find what to reclaim before `image_prune` /
+    `container_prune` / `volume_prune` / `buildx_prune`; use `system_info` for daemon config and
+    counts rather than sizes. The reply enumerates every object on the daemon, so expect a large
+    payload on busy hosts.
+
+    returns: dict - {"LayersSize", "Images", "Containers", "Volumes", "BuildCache"} with per-object
+        size fields
     """
     return _get_client(host).df()
 

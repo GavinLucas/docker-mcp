@@ -38,10 +38,14 @@ def config_create(
 @tool()
 def config_inspect(id_or_name: str, host: str | None = None) -> dict:
     """
-    Get a swarm config by id or name.
+    Get a swarm config's full inspect payload by id or name.
+
+    Requires a swarm manager. Unlike a secret, a config's payload IS readable after creation:
+    `Spec.Data` in the result holds the base64-encoded contents. Use `config_list` to enumerate
+    configs; use this to read one config's contents and metadata.
 
     args: id_or_name - The config id or name
-    returns: dict - The config's attrs
+    returns: dict - The config's attrs (ID, CreatedAt, UpdatedAt, Spec{Name, Labels, Data base64})
     """
     return _get_client(host).configs.get(id_or_name).attrs
 

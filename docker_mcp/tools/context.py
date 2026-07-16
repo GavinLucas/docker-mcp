@@ -18,8 +18,8 @@ def context_list() -> list:
     Contexts are a CLI concept (stored in the docker config dir) letting one CLI target multiple
     daemons. This server uses whatever DOCKER_HOST / current-context resolved to at startup, so
     changing contexts only affects future subprocess-based tools, not the docker-py SDK client.
-    Use `context_inspect` for one context's full config and `context_use` to switch. Raises RuntimeError if the CLI call
-    fails.
+    Use `context_inspect` for one context's full config and `context_use` to switch.
+    Raises RuntimeError if the CLI call fails.
 
     returns: list - One dict per context with at least name, description, dockerEndpoint, and current
     """
@@ -115,8 +115,8 @@ def context_remove(name: str, force: bool = False) -> dict:
     Remove a Docker CLI context.
 
     Deletes only the CLI's connection metadata — the daemon it pointed at is untouched. The
-    current context needs force=True (or `context_use` another first). Does not raise on a non-zero CLI exit — inspect
-    `returncode`/`stderr` in the result.
+    current context needs force=True (or `context_use` another first).
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Context name to remove

@@ -179,8 +179,8 @@ def buildx_bake(
     Build multiple targets defined in a bake file (HCL, JSON, or compose).
 
     Use it for multi-target builds declared in `docker-bake.hcl`/compose files; for a single
-    Dockerfile target use `buildx_build`. Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the
-    result.
+    Dockerfile target use `buildx_build`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         targets - Bake targets to build (default: the `default` group)
@@ -278,8 +278,8 @@ def buildx_imagetools_create(
 
     Replaces `docker manifest create` + `docker manifest push` — builds the index and pushes it in
     one operation. Source tags must already be pushed; this only stitches them together. Verify
-    the result with `buildx_imagetools_inspect`. Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr`
-    in the result.
+    the result with `buildx_imagetools_inspect`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         target - Tag for the new manifest list (`-t`)
@@ -318,7 +318,8 @@ def buildx_list(host: str | None = None) -> list:
     List builder instances.
 
     Machine-parsed view of every builder; use `buildx_inspect` for one builder's human-readable
-    detail and `buildx_use` to switch the default. Raises RuntimeError if the CLI call fails.
+    detail and `buildx_use` to switch the default.
+    Raises RuntimeError if the CLI call fails.
 
     returns: list - One dict per builder (parsed from `--format '{{json .}}'`).
                     If the captured stdout was truncated by MAX_CLI_OUTPUT_BYTES the
@@ -355,8 +356,9 @@ def buildx_history_inspect(ref: str = "", builder: str | None = None, host: str 
     """
     Inspect a single build record by ref, parsed from `--format json`.
 
-    Returns the full record for one build — duration, materials, attestations, error (if any) — for
-    debugging a failed or slow build found via `buildx_history_list`. Requires buildx >= v0.13.
+    Returns the full record for one build — duration, materials, attestations, error (if any) —
+    for debugging a failed or slow build found via `buildx_history_list`. Requires buildx >=
+    v0.13.
     Raises RuntimeError if the CLI call fails.
 
     args:
@@ -397,8 +399,8 @@ def buildx_inspect(name: str | None = None, bootstrap: bool = False, host: str |
     Inspect a builder instance.
 
     Human-readable detail (driver, status, supported platforms) for one builder; `buildx_list`
-    returns machine-parsed JSON for all builders. Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr`
-    in the result.
+    returns machine-parsed JSON for all builders.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Builder name (defaults to the active builder)
@@ -419,11 +421,12 @@ def buildx_du(builder: str | None = None, host: str | None = None) -> list:
     """
     Report BuildKit cache disk usage as a list of records.
 
-    A large cache can easily generate more output than MAX_CLI_OUTPUT_BYTES; if that
-    happens the captured stdout is truncated and this tool drops the final (partial)
-    record before parsing. For an exhaustive accounting on a busy builder, run
-    `docker buildx du --format '{{json .}}'` on the host directly. Reclaim the cache with
-    `buildx_prune` (`system_df` covers daemon-side disk, not builder cache). Raises RuntimeError if the CLI call fails.
+    A large cache can easily generate more output than MAX_CLI_OUTPUT_BYTES; if that happens the
+    captured stdout is truncated and this tool drops the final (partial) record before parsing.
+    For an exhaustive accounting on a busy builder, run `docker buildx du --format '{{json .}}'`
+    on the host directly. Reclaim the cache with `buildx_prune` (`system_df` covers daemon-side
+    disk, not builder cache).
+    Raises RuntimeError if the CLI call fails.
 
     args: builder - Override the active builder
     returns: list - One dict per cache record (parsed from `--format '{{json .}}'`)
@@ -497,8 +500,8 @@ def buildx_create(
     Needed when the default `docker` driver falls short: multi-platform builds and cache export
     require a `docker-container` (or `kubernetes`/`remote`) builder. Pass `use=True` to make it
     the default for later `buildx_build` calls (else switch with `buildx_use`); `bootstrap=True`
-    starts the builder now rather than on first build. Does not raise on a non-zero CLI exit —
-    inspect `returncode`/`stderr` in the result.
+    starts the builder now rather than on first build.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Name for the new builder (defaults to a generated name)
@@ -573,8 +576,8 @@ def buildx_remove(
     Remove a builder instance.
 
     Deletes a builder made by `buildx_create`, including its build cache unless keep_state=True;
-    use `buildx_prune` to reclaim cache while keeping the builder. Does not raise on a non-zero CLI exit — inspect
-    `returncode`/`stderr` in the result.
+    use `buildx_prune` to reclaim cache while keeping the builder.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Builder name to remove (mutually exclusive with `all_inactive`)

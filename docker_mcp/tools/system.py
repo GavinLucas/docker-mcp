@@ -289,10 +289,11 @@ def host_list() -> list[dict]:
     """
     List the Docker hosts configured via DOCKER_MCP_SERVER_HOSTS.
 
-    With a single host (or the var unset) this is the one resolved daemon; with several it is the set
-    that the `host` argument selects from. The `default` entry is the one used when `host` is omitted; pass a
-    `name` as the `host` argument of daemon-backed tools (`system_ping(host=...)` checks one
-    entry). The `docker-mcp://hosts` resource mirrors this tool.
+    With a single host (or the var unset) this is the one resolved daemon; with several it is
+    the set that the `host` argument selects from. The `default` entry is the one used when
+    `host` is omitted; pass a `name` as the `host` argument of daemon-backed tools
+    (`system_ping(host=...)` checks one entry). The `docker-mcp://hosts` resource mirrors this
+    tool.
 
     returns: list[dict] - one per host: name; url (resolved daemon URL, null = docker-py platform
         default); read_only; tls (whether a per-host cert dir is configured); default (the omitted-host fallback)

@@ -59,10 +59,11 @@ def stack_deploy(
     """
     Deploy (or update) a stack to the swarm from one or more Compose files.
 
-    Requires the target daemon to be a swarm manager. Re-running with the same `name` updates
-    the stack in place. Defaults to `detach=True` (returns once specs are submitted, not on
-    convergence); set `detach=False` to wait for the rollout (give it a generous `timeout_seconds`).
-    The swarm analogue of `compose_up`; watch the rollout with `stack_services` / `stack_ps`.
+    Requires the target daemon to be a swarm manager. Re-running with the same `name` updates the
+    stack in place. Defaults to `detach=True` (returns once specs are submitted, not on
+    convergence); set `detach=False` to wait for the rollout (give it a generous
+    `timeout_seconds`). The swarm analogue of `compose_up`; watch the rollout with
+    `stack_services` / `stack_ps`.
     Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
@@ -99,9 +100,9 @@ def stack_list(host: str | None = None) -> list:
     """
     List the stacks deployed to the swarm, parsed from `--format '{{json .}}'`.
 
-    Requires the target daemon to be a swarm manager. `compose_list` is the non-swarm
-    equivalent; drill into one stack with `stack_services`. Raises RuntimeError if the CLI call
-    fails.
+    Requires the target daemon to be a swarm manager. `compose_list` is the non-swarm equivalent;
+    drill into one stack with `stack_services`.
+    Raises RuntimeError if the CLI call fails.
 
     returns: list - One dict per stack (name, services count, orchestrator)
     """
@@ -116,7 +117,8 @@ def stack_ps(name: str, no_trunc: bool = False, filters: dict | None = None, hos
     List the tasks of a stack, parsed from `--format '{{json .}}'`.
 
     Task-level view across every service in the stack (`service_ps` covers one service): where
-    each task runs and why it failed. Requires a swarm manager. Raises RuntimeError if the CLI call fails.
+    each task runs and why it failed. Requires a swarm manager.
+    Raises RuntimeError if the CLI call fails.
 
     args:
         name - The stack to list tasks for
@@ -140,7 +142,8 @@ def stack_services(name: str, filters: dict | None = None, host: str | None = No
     List the services of a stack, parsed from `--format '{{json .}}'`.
 
     Service-level rollup (replicas ready per service); use `stack_ps` for individual tasks and
-    `service_inspect` for one service's full spec. Requires a swarm manager. Raises RuntimeError if the CLI call fails.
+    `service_inspect` for one service's full spec. Requires a swarm manager.
+    Raises RuntimeError if the CLI call fails.
 
     args:
         name - The stack to list services for
@@ -163,9 +166,9 @@ def stack_remove(
     Remove one or more stacks from the swarm (tears down their services, networks, and secrets).
 
     Destructive: this stops and deletes every service in the named stack(s) — the reverse of
-    `stack_deploy` and the swarm analogue of `compose_down`. Defaults to `detach=True` so the
-    call returns once removal is requested rather than waiting for teardown. Does not raise on a non-zero CLI exit —
-    inspect `returncode`/`stderr` in the result.
+    `stack_deploy` and the swarm analogue of `compose_down`. Defaults to `detach=True` so the call
+    returns once removal is requested rather than waiting for teardown.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         names - One or more stack names to remove. At least one is required.

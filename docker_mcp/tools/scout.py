@@ -48,8 +48,8 @@ def scout_cves(
     Anonymous scans work for public images; Hub policy enforcement and richer recommendations need
     `docker login` on the host running this MCP server. Start with `scout_quickview` for a
     per-severity summary; `scout_sbom` inventories packages without vulnerability matching.
-    Does not raise on a non-zero CLI exit — inspect `raw.stderr` (a missing scout plugin still
-    raises).
+    Does not raise on a non-zero CLI exit (a missing scout plugin still raises) — inspect
+    `raw.stderr`.
 
     args:
         image - Image reference (a tag or a digest)
@@ -82,9 +82,9 @@ def scout_quickview(image: str, format: str = "json", platform: str | None = Non
     Render a compact summary of an image's CVE posture.
 
     The fastest triage step — counts per severity plus base-image status. Drill into individual
-    findings with `scout_cves`; get upgrade suggestions with `scout_recommendations`. Does not raise on a non-zero CLI
-    exit — inspect `raw.stderr` (a missing scout plugin still
-    raises).
+    findings with `scout_cves`; get upgrade suggestions with `scout_recommendations`.
+    Does not raise on a non-zero CLI exit (a missing scout plugin still raises) — inspect
+    `raw.stderr`.
 
     args:
         image - Image reference
@@ -114,11 +114,11 @@ def scout_recommendations(
     """
     Suggest base-image upgrades for an image.
 
-    Computed against Docker Scout's catalog; generally needs `docker login` on the host running this
-    MCP server to return useful results for private or rarely-scanned base images. The natural
-    follow-up to `scout_cves` when the fix is a newer base image. Does not raise on a non-zero CLI exit — inspect
-    `raw.stderr` (a missing scout plugin still
-    raises).
+    Computed against Docker Scout's catalog; generally needs `docker login` on the host running
+    this MCP server to return useful results for private or rarely-scanned base images. The
+    natural follow-up to `scout_cves` when the fix is a newer base image.
+    Does not raise on a non-zero CLI exit (a missing scout plugin still raises) — inspect
+    `raw.stderr`.
 
     args:
         image - Image reference
@@ -159,11 +159,11 @@ def scout_compare(
     """
     Compare two image references and report the CVE delta.
 
-    Exactly one of `to`, `to_env`, or `to_latest=True` must be supplied to identify
-    the comparison target. Use it after a rebuild to check the new image against the old
-    (`scout_cves` scans a single image). Does not raise on a non-zero CLI exit — inspect `raw.stderr` (a missing scout
-    plugin still
-    raises).
+    Exactly one of `to`, `to_env`, or `to_latest=True` must be supplied to identify the comparison
+    target. Use it after a rebuild to check the new image against the old (`scout_cves` scans a
+    single image).
+    Does not raise on a non-zero CLI exit (a missing scout plugin still raises) — inspect
+    `raw.stderr`.
 
     args:
         image - The new / candidate image reference
@@ -211,8 +211,9 @@ def scout_sbom(
     Package inventory only — `scout_cves` adds vulnerability matching on top. SBOMs can be large;
     captured stdout is subject to MAX_CLI_OUTPUT_BYTES and may be truncated for big images. If
     that's a concern, run `docker scout sbom -o file.json …` on the host and load the file
-    separately. Does not raise on a non-zero CLI exit — inspect `raw.stderr` (a missing scout plugin still
-    raises).
+    separately.
+    Does not raise on a non-zero CLI exit (a missing scout plugin still raises) — inspect
+    `raw.stderr`.
 
     args:
         image - Image reference

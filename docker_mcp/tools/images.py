@@ -145,7 +145,8 @@ def image_list(
         repository - Only show images of this repository
         all - Show intermediate image layers
         filters - Filter by attributes (label, dangling, before, since, etc.)
-    returns: list - One full inspect payload (as `docker inspect`) per image
+    returns: list - One summary dict per image ({"Id", "RepoTags", "RepoDigests", "Created",
+        "Size", "Labels", ...}); use `image_inspect` for a full inspect payload
     """
     return [i.attrs for i in _get_client(host).images.list(name=repository, all=all, filters=filters)]
 

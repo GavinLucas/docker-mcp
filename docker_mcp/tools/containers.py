@@ -201,8 +201,9 @@ def container_list(
         ignore_removed - Ignore containers removed during listing
         managed_only - Only return containers created by this MCP server (filters on the
                              docker-mcp-server.managed label); combines with any `filters` given
-    returns: list - One full inspect payload (as `docker inspect`) per container; abridged when
-        sparse=True
+    returns: list - One dict per container: full inspect payloads by default (each match is
+        inspected, like `container_inspect`); sparse=True skips the per-container inspect calls
+        and returns the daemon's abridged list entries instead
     """
     if managed_only:
         filters = managed_filter(filters)

@@ -18,6 +18,8 @@ def context_list() -> list:
     Contexts are a CLI concept (stored in the docker config dir) letting one CLI target multiple
     daemons. This server uses whatever DOCKER_HOST / current-context resolved to at startup, so
     changing contexts only affects future subprocess-based tools, not the docker-py SDK client.
+    Use `context_inspect` for one context's full config and `context_use` to switch.
+    Raises RuntimeError if the CLI call fails.
 
     returns: list - One dict per context with at least name, description, dockerEndpoint, and current
     """
@@ -31,8 +33,12 @@ def context_inspect(name: str) -> dict:
     """
     Return the full configuration for a single Docker context.
 
+    Full endpoint/TLS detail for one context; `context_list` gives the one-line summary of all.
+    Raises RuntimeError if the CLI call fails.
+
     args: name - Context name (use the `Name` field from `context_list`)
-    returns: dict - The parsed `docker context inspect` entry for that context
+    returns: dict - The parsed `docker context inspect` entry (keys include "Name" and
+        "Endpoints" with the daemon URL)
     """
     result = run_docker(["context", "inspect", safe_positional(name, "context name")])
     raise_on_cli_failure(result, "context inspect")
@@ -57,6 +63,10 @@ def context_create(
 ) -> dict:
     """
     Create a new Docker CLI context pointing at a daemon endpoint.
+
+    Registers a named endpoint for the CLI; switch with `context_use`, enumerate with
+    `context_list`. It does not retarget this server's docker-py client (pinned at startup).
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Name for the new context (must not already exist)
@@ -90,7 +100,8 @@ def context_use(name: str) -> dict:
 
     Note: this does not retarget the long-lived docker-py client — SDK-backed tools keep using the
     endpoint they connected to at startup. To retarget those, restart the server with a different
-    DOCKER_HOST / DOCKER_CONTEXT.
+    DOCKER_HOST / DOCKER_CONTEXT. Create contexts with `context_create`; list them with
+    `context_list`.
 
     args: name - Existing context name to set as default
     returns: dict - {"returncode": int, "stdout": str, "stderr": str, "truncated": bool}
@@ -102,6 +113,10 @@ def context_use(name: str) -> dict:
 def context_remove(name: str, force: bool = False) -> dict:
     """
     Remove a Docker CLI context.
+
+    Deletes only the CLI's connection metadata — the daemon it pointed at is untouched. The
+    current context needs force=True (or `context_use` another first).
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         name - Context name to remove

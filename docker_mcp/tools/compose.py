@@ -115,6 +115,10 @@ def compose_down(
     """
     Stop and remove containers, networks (and optionally volumes) for a compose project.
 
+    Inverse of `compose_up`. Images are kept; named volumes go only with volumes=True
+    (destructive). Use `compose_stop` to stop without removing anything.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
+
     args:
         project_dir - Dir with the compose file (default: server cwd)
         files - Explicit compose file paths (repeatable, `-f`)
@@ -144,6 +148,10 @@ def compose_ps(
 ) -> dict:
     """
     List containers in a compose project, parsed from `--format json`.
+
+    Container-level view of one project (state, health, publishers); `compose_list` enumerates
+    projects, and `container_list` covers non-compose containers.
+    Does not raise on a non-zero CLI exit: `services` comes back empty — inspect `raw.stderr`.
 
     args:
         project_dir - Dir with the compose file (default: server cwd)
@@ -190,6 +198,10 @@ def compose_logs(
     """
     Fetch a bounded slice of logs from a compose project (never follows).
 
+    Bounded and non-following by design, so it always returns promptly. For one container's logs
+    use `container_logs`; for a swarm service use `service_logs`. Log text arrives on `stdout`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
+
     args:
         project_dir - Dir with the compose file (default: server cwd)
         files - Explicit compose file paths (repeatable, `-f`)
@@ -226,6 +238,10 @@ def compose_config(
 ) -> dict:
     """
     Render the canonical compose configuration after merges, profiles, and variable substitution.
+
+    Use it to validate compose files and see exactly what the CLI will run before `compose_up`.
+    Does not raise on a non-zero CLI exit: on a failed render `config` may be None — inspect
+    `raw.stderr`.
 
     args:
         project_dir - Dir with the compose file (default: server cwd)
@@ -268,6 +284,10 @@ def compose_build(
 ) -> dict:
     """
     Build images for a compose project.
+
+    Builds the images declared by the project's `build:` sections without starting anything —
+    `compose_up(build=True)` builds and starts in one step.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         project_dir - Dir with the compose file (default: server cwd)
@@ -441,7 +461,9 @@ def compose_run(
     """
     Run a one-off command against a compose service.
 
-    Always passes `-T` (no TTY under MCP). Defaults to detached with `--rm` so the call returns promptly.
+    Always passes `-T` (no TTY under MCP). Defaults to detached with `--rm` so the call returns
+    promptly. Unlike `compose_exec`, this starts a NEW container for the service rather than
+    running inside the existing one.
 
     args:
         service - Service name from the compose file
@@ -540,7 +562,8 @@ def compose_images(
 
     Answers "what image and tag does each service container actually run?" — the containers must
     exist (`compose_up`/`compose_create` first). Use `compose_ps` for container state and
-    `image_list` for daemon-wide images. Raises RuntimeError if the CLI call fails.
+    `image_list` for daemon-wide images.
+    Raises RuntimeError if the CLI call fails.
 
     args:
         project_dir - Dir with the compose file (default: server cwd)
@@ -577,7 +600,9 @@ def compose_port(
     Resolve the host binding for a service's container port.
 
     The compose equivalent of `docker port`: which host address/port a service's private port is
-    published on. `published` is None when the port isn't published.
+    published on. `published` is None when the port isn't published. For non-compose containers
+    read `container_inspect`'s NetworkSettings.Ports instead.
+    Raises RuntimeError if the CLI call fails.
 
     args:
         service - Service name from the compose file
@@ -630,7 +655,8 @@ def compose_wait(
 
     For one-shot / batch services. A long-running service that never exits blocks until
     `timeout_seconds`, then the subprocess is killed (TimeoutExpired) — bound it sensibly.
-    Exit codes are on stdout.
+    Exit codes are on stdout. For a single container use `container_wait`; for swarm services
+    use `service_wait`.
 
     args:
         services - One or more services to wait on. At least one is required.
@@ -658,7 +684,9 @@ def compose_top(
     """
     Show the running processes of a compose project's containers.
 
-    Output is the `ps`-style process table per service (not JSON); read it from `stdout`.
+    Output is the `ps`-style process table per service (not JSON); read it from `stdout`. The
+    per-container equivalent is `container_top`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         services - Restrict to these services (default: all)
@@ -688,9 +716,11 @@ def compose_cp(
     """
     Copy files/folders between a service container and the server host's filesystem.
 
-    Exactly one of `source`/`dest` is `SERVICE:PATH`; the other is a path on the host running this MCP
-    server, read/written as the server's user (same host exposure as the file-path archive tools — see
-    SECURITY.md). Copying to stdout (`dest="-"`) is unsupported; use the container-archive tools.
+    Exactly one of `source`/`dest` is `SERVICE:PATH`; the other is a path on the host running this
+    MCP server, read/written as the server's user (same host exposure as the file-path archive
+    tools — see SECURITY.md). Copying to stdout (`dest="-"`) is unsupported; use
+    `container_archive_get`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         source - `SERVICE:SRC_PATH` or a host path
@@ -726,6 +756,10 @@ def compose_kill(
     """
     Send a signal to a compose project's containers (default SIGKILL).
 
+    Immediate, with no grace period — prefer `compose_stop` for a clean shutdown (stop signal,
+    then kill after a timeout).
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
+
     args:
         services - Restrict to these services (default: all)
         signal - Signal to send (default "SIGKILL"; e.g. "SIGTERM", "SIGHUP")
@@ -757,9 +791,9 @@ def compose_pause(
     Pause the containers of a compose project (freezes their processes in place).
 
     Paused containers stop consuming CPU but keep memory, network endpoints, and state; resume
-    with `compose_unpause`. To actually stop containers (each one's configured stop signal, freeing
-    resources) use `compose_stop`; to stop and delete them use `compose_down`. Does not raise on a
-    non-zero CLI exit — inspect `returncode`/`stderr` in the result.
+    with `compose_unpause`. To actually stop containers (each one's configured stop signal,
+    freeing resources) use `compose_stop`; to stop and delete them use `compose_down`.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
 
     args:
         services - Restrict to these services (default: all)
@@ -785,6 +819,10 @@ def compose_unpause(
     """
     Unpause the containers of a compose project (resumes paused processes).
 
+    Reverse of `compose_pause`: processes continue from where they were frozen (no restart).
+    `compose_start` is the counterpart for stopped containers.
+    Does not raise on a non-zero CLI exit — inspect `returncode`/`stderr` in the result.
+
     args:
         services - Restrict to these services (default: all)
         project_dir - Dir with the compose file (default: server cwd)
@@ -802,6 +840,10 @@ def compose_unpause(
 def compose_list(all: bool = False, host: str | None = None) -> list:
     """
     List compose projects known to the daemon (across all directories).
+
+    Project-level view (one entry per project); `compose_ps` lists the containers of a single
+    project.
+    Raises RuntimeError if the CLI call fails.
 
     args: all - Include stopped projects
     returns: list - One dict per project (parsed from `--format json`)

@@ -170,16 +170,21 @@ fi
 # Mirrors what the release workflow does with the tag, except this is strictly temporary: the
 # manifest is restored by the EXIT trap, so a dev build never leaves the working tree modified.
 stamp_manifest() {
-	local target="$1" tmp
+	local target="$1" tmp status=0
 	tmp="$(mktemp)"
+	# Capture the writer's status rather than letting `set -e` abort mid-function: an early exit
+	# there would skip the checks below and leak $tmp. Every failure path frees it explicitly.
 	if command -v jq >/dev/null 2>&1; then
-		jq --arg v "$target" '.version = $v' "$manifest" > "$tmp"
+		jq --arg v "$target" '.version = $v' "$manifest" > "$tmp" || status=$?
 	else
 		# Anchored on the top-level two-space indent so "manifest_version" can't be hit.
-		sed 's/^\(  "version"[[:space:]]*:[[:space:]]*\)"[^"]*"/\1"'"$target"'"/' "$manifest" > "$tmp"
+		sed 's/^\(  "version"[[:space:]]*:[[:space:]]*\)"[^"]*"/\1"'"$target"'"/' "$manifest" > "$tmp" || status=$?
 	fi
-	[ -s "$tmp" ] || { rm -f "$tmp"; die "failed to stamp version into $manifest"; }
-	cat "$tmp" > "$manifest"
+	if [ "$status" -ne 0 ] || [ ! -s "$tmp" ]; then
+		rm -f "$tmp"
+		die "failed to stamp version into $manifest (is it valid JSON?)"
+	fi
+	cat "$tmp" > "$manifest" || { rm -f "$tmp"; die "failed to write $manifest"; }
 	rm -f "$tmp"
 }
 

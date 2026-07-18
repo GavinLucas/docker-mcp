@@ -106,13 +106,16 @@ version="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$pypr
 [ -n "$version" ] || die "could not parse version from $pyproject"
 
 # Warn (don't fail) if manifest.json has drifted from pyproject — CI restamps it at release time,
-# so a local test bundle still packs fine, but a mismatch is worth surfacing.
+# so a local test bundle still packs fine, but a mismatch is worth surfacing. pyproject is the
+# source of truth (tests/test_pyproject_pins.py asserts the manifest matches it), so the dev stamp
+# below is derived from pyproject and overrides the drifted manifest value rather than inheriting
+# it — a local bundle should never carry a version the project does not claim.
 manifest="$repo_root/manifest.json"
 if [ -f "$manifest" ]; then
 	manifest_version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1)"
 	if [ -n "$manifest_version" ] && [ "$manifest_version" != "$version" ]; then
-		printf 'warning: manifest.json version (%s) != pyproject.toml version (%s); packing as-is.\n' \
-			"$manifest_version" "$version" >&2
+		printf 'warning: manifest.json version (%s) != pyproject.toml version (%s); the dev stamp uses %s.\n' \
+			"$manifest_version" "$version" "$version" >&2
 	fi
 fi
 

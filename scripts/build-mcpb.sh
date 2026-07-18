@@ -7,12 +7,20 @@
 # attaches the asset to the GitHub Release). This script mirrors that pack step so you can
 # produce an installable bundle locally to smoke-test in Claude Desktop.
 #
+# Bundles are stamped as dev builds: the manifest version becomes
+# <pyproject-version>-dev.<short-commit>[.dirty] (e.g. 2.1.4-dev.693de829.dirty), so a locally
+# built bundle is never mistaken for a release in Claude Desktop's extension list, and the commit
+# it was built from is identifiable even though there is no tag. ".dirty" means the working tree
+# had uncommitted changes, so the commit id alone does not describe what was packed. The manifest
+# is stamped only for the duration of the pack and restored afterwards (including on failure).
+#
 # Usage:
 #   scripts/build-mcpb.sh [name]
 #
 #   name   Optional output filename (a ".mcpb" extension is added if missing). Relative names
 #          land in dist/; an absolute or ./-prefixed path is used as-is. If omitted, defaults to
-#          dist/docker-mcp-server-<version>.mcpb, falling back to -1, -2, … when that file exists.
+#          dist/docker-mcp-server-<dev-version>.mcpb, falling back to -1, -2, … when that file
+#          exists.
 #
 # Options:
 #   -f, --force   Overwrite the output file if it already exists (only meaningful with [name];
@@ -31,8 +39,9 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 
 usage() {
-	# Print the header comment block (between the shebang and `set -euo`) as help text.
-	sed -n '3,25p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+	# Print the header comment block (from line 3 to the first non-comment line) as help text,
+	# so editing the header can't desync the help output from it.
+	awk 'NR < 3 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"
 }
 
 die() {
@@ -107,6 +116,23 @@ if [ -f "$manifest" ]; then
 	fi
 fi
 
+# --- derive the dev build version ---------------------------------------------------------------
+# A local bundle is not a release, so mark it: <version>-dev.<short-commit>[.dirty]. The pre-release
+# suffix is valid semver and sorts below the release of the same version, and the commit id says
+# what it was likely built from (".dirty" = uncommitted changes, so the commit id isn't the whole
+# story). Outside a git checkout (e.g. an unpacked sdist) fall back to a bare "-dev".
+build_version="$version-dev"
+if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1; then
+	commit="$(git -C "$repo_root" rev-parse --short=8 HEAD 2>/dev/null || true)"
+	if [ -n "$commit" ]; then
+		build_version="$version-dev.$commit"
+		# --porcelain honors .gitignore, so dist/ and other ignored output don't count as dirty.
+		if [ -n "$(git -C "$repo_root" status --porcelain 2>/dev/null)" ]; then
+			build_version="$build_version.dirty"
+		fi
+	fi
+fi
+
 # --- decide the output path ---------------------------------------------------------------------
 dist_dir="$repo_root/dist"
 mkdir -p "$dist_dir"
@@ -129,16 +155,43 @@ if [ -n "$name" ]; then
 	fi
 else
 	# Default name with auto-incrementing suffix so repeated builds never overwrite each other.
-	out="$dist_dir/docker-mcp-server-${version}.mcpb"
+	out="$dist_dir/docker-mcp-server-${build_version}.mcpb"
 	n=1
 	while [ -e "$out" ]; do
-		out="$dist_dir/docker-mcp-server-${version}-${n}.mcpb"
+		out="$dist_dir/docker-mcp-server-${build_version}-${n}.mcpb"
 		n=$((n + 1))
 	done
 fi
 
+# --- stamp the dev version into the manifest ----------------------------------------------------
+# Mirrors what the release workflow does with the tag, except this is strictly temporary: the
+# manifest is restored by the EXIT trap, so a dev build never leaves the working tree modified.
+stamp_manifest() {
+	local target="$1" tmp
+	tmp="$(mktemp)"
+	if command -v jq >/dev/null 2>&1; then
+		jq --arg v "$target" '.version = $v' "$manifest" > "$tmp"
+	else
+		# Anchored on the top-level two-space indent so "manifest_version" can't be hit.
+		sed 's/^\(  "version"[[:space:]]*:[[:space:]]*\)"[^"]*"/\1"'"$target"'"/' "$manifest" > "$tmp"
+	fi
+	[ -s "$tmp" ] || { rm -f "$tmp"; die "failed to stamp version into $manifest"; }
+	cat "$tmp" > "$manifest"
+	rm -f "$tmp"
+}
+
+if [ -f "$manifest" ]; then
+	manifest_backup="$(mktemp)"
+	cp "$manifest" "$manifest_backup"
+	# shellcheck disable=SC2064  # expand $manifest_backup now, not at trap time
+	trap "cp '$manifest_backup' '$manifest'; rm -f '$manifest_backup'" EXIT
+	stamp_manifest "$build_version"
+	packed_version="$(sed -n 's/^  "version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1)"
+	[ "$packed_version" = "$build_version" ] || die "version stamp did not apply to $manifest"
+fi
+
 # --- pack ---------------------------------------------------------------------------------------
-printf 'Packing %s …\n' "$out"
+printf 'Packing %s (version %s) …\n' "$out" "$build_version"
 (cd "$repo_root" && "${mcpb_cmd[@]}" pack . "$out")
 
 # --- report -------------------------------------------------------------------------------------
@@ -151,6 +204,7 @@ fi
 
 size="$(du -h "$out" | cut -f1 | tr -d '[:space:]')"
 printf '\nBuilt %s (%s)\n' "$out" "$size"
+printf 'version %s  (dev build — not a release)\n' "$build_version"
 [ -f "$out.sha256" ] && printf 'sha256 %s\n' "$out.sha256"
 printf '\nTest it: open Claude Desktop and install the bundle, or inspect with:\n  %s info %s\n' \
 	"${mcpb_cmd[*]}" "$out"
